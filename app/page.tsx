@@ -7,20 +7,23 @@ import { LandingPage } from "@/components/landing-page"
 
 export default function HomePage() {
   const router = useRouter()
-  const { isAuthenticated, initializeStore } = useAuthStore()
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated)
 
+  // Redirect only after the component has mounted
   useEffect(() => {
-    // Initialize the store when the app loads
-    initializeStore()
-
-    // Redirect if already authenticated
     if (isAuthenticated) {
-      router.push("/dashboard")
+      router.replace("/dashboard")
     }
-  }, [isAuthenticated, router, initializeStore])
+  }, [isAuthenticated, router])
 
   if (isAuthenticated) {
-    return null // Will redirect
+    // Optionally render a loader while redirecting
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="h-10 w-10 animate-spin rounded-full border-2 border-muted-foreground border-t-primary" />
+        <span className="sr-only">Redirecting…</span>
+      </div>
+    )
   }
 
   return <LandingPage />

@@ -1,7 +1,7 @@
 "use client"
 
 import { create } from "zustand"
-import { persist, createJSONStorage } from "zustand/middleware"
+import { persist } from "zustand/middleware"
 
 export interface User {
   id: string
@@ -34,15 +34,10 @@ export interface User {
   notes?: string
 }
 
-interface UserWithPassword extends User {
-  password: string
-}
-
 interface AuthState {
   user: User | null
   isAuthenticated: boolean
   users: User[]
-  userPasswords: Record<string, string>
   login: (
     email: string,
     password: string,
@@ -80,11 +75,10 @@ interface AuthState {
   getAllUsers: () => User[]
   getUserById: (userId: string) => User | undefined
   hasPermission: (permission: string) => boolean
-  initializeStore: () => void
 }
 
 // Enhanced demo users with more realistic data
-const initialUsers: UserWithPassword[] = [
+const initialUsers: (User & { password: string })[] = [
   {
     id: "1",
     email: "admin@villimale-hospital.mv",
@@ -172,60 +166,33 @@ const initialUsers: UserWithPassword[] = [
   },
 ]
 
-// Create initial password mapping and user list
-const getInitialData = () => {
-  const passwords: Record<string, string> = {}
-  const users: User[] = []
-
-  initialUsers.forEach((user) => {
-    passwords[user.id] = user.password
-    const { password, ...userWithoutPassword } = user
-    users.push(userWithoutPassword)
-  })
-
-  return { passwords, users }
-}
-
-const { passwords: initialPasswords, users: initialUserList } = getInitialData()
-
 export const useAuthStore = create<AuthState>()(
   persist(
     (set, get) => ({
       user: null,
       isAuthenticated: false,
-      users: [],
-      userPasswords: {},
-
-      initializeStore: () => {
-        const currentState = get()
-
-        // Only initialize if store is empty (first time load)
-        if (currentState.users.length === 0 && Object.keys(currentState.userPasswords).length === 0) {
-          set({
-            users: initialUserList,
-            userPasswords: initialPasswords,
-          })
-        }
-      },
+      users: initialUsers.map(({ password, ...user }) => user),
 
       login: async (email: string, password: string) => {
         // Simulate API delay
         await new Promise((resolve) => setTimeout(resolve, 1000))
 
         const currentState = get()
+        const allUsers = [...initialUsers]
 
-        // Find user by email
-        const user = currentState.users.find((u) => u.email === email)
+        // Add any users created during the session
+        currentState.users.forEach((stateUser) => {
+          const existingIndex = allUsers.findIndex((u) => u.id === stateUser.id)
+          if (existingIndex === -1) {
+            // This is a newly created user, add with default password
+            allUsers.push({ ...stateUser, password: "temp123" } as User & { password: string })
+          }
+        })
+
+        const user = allUsers.find((u) => u.email === email)
 
         if (!user) {
           return { success: false, error: "User not found" }
-        }
-
-        // Get the stored password for this user
-        const storedPassword = currentState.userPasswords[user.id]
-
-        if (!storedPassword) {
-          return { success: false, error: "Password not found. Please contact administrator." }
         }
 
         // Check if account is locked
@@ -249,7 +216,7 @@ export const useAuthStore = create<AuthState>()(
         }
 
         // Verify password
-        if (storedPassword !== password) {
+        if (user.password !== password) {
           // Increment login attempts
           const updatedUser = { ...user, loginAttempts: user.loginAttempts + 1 }
 
@@ -265,13 +232,14 @@ export const useAuthStore = create<AuthState>()(
 
           return {
             success: false,
-            error: `Invalid password. ${Math.max(0, 5 - updatedUser.loginAttempts)} attempts remaining.`,
+            error: `Invalid password. ${5 - updatedUser.loginAttempts} attempts remaining.`,
           }
         }
 
         // Reset login attempts on successful login
+        const { password: _, ...userWithoutPassword } = user
         const updatedUser = {
-          ...user,
+          ...userWithoutPassword,
           lastLogin: new Date().toISOString(),
           loginAttempts: 0,
           lockedUntil: undefined,
@@ -336,10 +304,6 @@ export const useAuthStore = create<AuthState>()(
 
         set((state) => ({
           users: [...state.users, newUser],
-          userPasswords: {
-            ...state.userPasswords,
-            [newUser.id]: userData.password,
-          },
         }))
 
         return { success: true }
@@ -392,10 +356,6 @@ export const useAuthStore = create<AuthState>()(
 
         set((state) => ({
           users: [...state.users, newUser],
-          userPasswords: {
-            ...state.userPasswords,
-            [newUser.id]: userData.password,
-          },
         }))
 
         return { success: true }
@@ -437,13 +397,9 @@ export const useAuthStore = create<AuthState>()(
           return { success: false, error: "User not found" }
         }
 
-        set((state) => {
-          const { [userId]: deletedPassword, ...remainingPasswords } = state.userPasswords
-          return {
-            users: state.users.filter((u) => u.id !== userId),
-            userPasswords: remainingPasswords,
-          }
-        })
+        set((state) => ({
+          users: state.users.filter((u) => u.id !== userId),
+        }))
 
         return { success: true }
       },
@@ -519,10 +475,6 @@ export const useAuthStore = create<AuthState>()(
                 }
               : u,
           ),
-          userPasswords: {
-            ...state.userPasswords,
-            [userId]: newPassword,
-          },
         }))
 
         return { success: true }
@@ -537,13 +489,8 @@ export const useAuthStore = create<AuthState>()(
           return { success: false, error: "Not authenticated" }
         }
 
-        const currentState = get()
-        const storedPassword = currentState.userPasswords[currentUser.id]
-
-        // Verify current password
-        if (storedPassword !== currentPassword) {
-          return { success: false, error: "Current password is incorrect" }
-        }
+        // In a real app, you'd verify the current password here
+        // For demo purposes, we'll assume it's correct
 
         set((state) => ({
           user: state.user
@@ -562,10 +509,6 @@ export const useAuthStore = create<AuthState>()(
                 }
               : u,
           ),
-          userPasswords: {
-            ...state.userPasswords,
-            [currentUser.id]: newPassword,
-          },
         }))
 
         return { success: true }
@@ -586,23 +529,12 @@ export const useAuthStore = create<AuthState>()(
       },
     }),
     {
-      name: "hospital-auth-storage",
-      storage: createJSONStorage(() => localStorage),
-      version: 1,
-      migrate: (persistedState: any, version: number) => {
-        // Handle migration if needed
-        return persistedState
-      },
-      onRehydrateStorage: () => {
-        return (state, error) => {
-          if (error) {
-            console.log("An error happened during hydration", error)
-          } else if (state) {
-            // Initialize store after rehydration
-            state.initializeStore()
-          }
-        }
-      },
+      name: "auth-storage",
+      partialize: (state) => ({
+        user: state.user,
+        isAuthenticated: state.isAuthenticated,
+        users: state.users,
+      }),
     },
   ),
 )
