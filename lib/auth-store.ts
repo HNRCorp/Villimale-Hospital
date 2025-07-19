@@ -1,587 +1,519 @@
-"use client"
-
 import { create } from "zustand"
 import { persist } from "zustand/middleware"
+import { supabase } from "./supabase"
+import bcrypt from "bcryptjs"
 
 export interface User {
   id: string
   email: string
   firstName: string
   lastName: string
-  role:
-    | "System Administrator"
-    | "Inventory Manager"
-    | "Department Head"
-    | "Doctor"
-    | "Nurse Manager"
-    | "Pharmacist"
-    | "Inventory Staff"
-    | "Department Staff"
+  role: string
   department: string
   status: "Active" | "Inactive" | "Pending Approval" | "Suspended"
-  createdAt: string
-  lastLogin?: string
   employeeId?: string
   phone?: string
   permissions: string[]
   profileImage?: string
   isFirstLogin: boolean
-  passwordLastChanged?: string
+  passwordLastChanged: string
   loginAttempts: number
   lockedUntil?: string
   approvedBy?: string
   approvedAt?: string
   notes?: string
+  createdAt: string
+  updatedAt: string
+  lastLogin?: string
 }
 
-interface AuthState {
-  user: User | null
-  isAuthenticated: boolean
+interface AuthStore {
+  // State
+  currentUser: User | null
   users: User[]
-  login: (
-    email: string,
-    password: string,
-  ) => Promise<{ success: boolean; error?: string; requiresPasswordChange?: boolean }>
+  isAuthenticated: boolean
+  isLoading: boolean
+  error: string | null
+
+  // Actions
+  login: (email: string, password: string) => Promise<boolean>
   logout: () => void
-  register: (userData: {
-    email: string
-    password: string
-    firstName: string
-    lastName: string
-    role: string
-    department: string
-    employeeId?: string
-    phone?: string
-  }) => Promise<{ success: boolean; error?: string }>
-  createUser: (userData: {
-    email: string
-    password: string
-    firstName: string
-    lastName: string
-    role: string
-    department: string
-    employeeId?: string
-    phone?: string
-    permissions: string[]
-    status?: string
-    notes?: string
-  }) => Promise<{ success: boolean; error?: string }>
-  updateUser: (userId: string, updates: Partial<User>) => Promise<{ success: boolean; error?: string }>
-  deleteUser: (userId: string) => Promise<{ success: boolean; error?: string }>
-  approveUser: (userId: string, approverId: string) => Promise<{ success: boolean; error?: string }>
-  suspendUser: (userId: string, reason: string) => Promise<{ success: boolean; error?: string }>
-  resetPassword: (userId: string, newPassword: string) => Promise<{ success: boolean; error?: string }>
-  changePassword: (currentPassword: string, newPassword: string) => Promise<{ success: boolean; error?: string }>
-  getAllUsers: () => User[]
-  getUserById: (userId: string) => User | undefined
-  hasPermission: (permission: string) => boolean
+  register: (
+    userData: Omit<User, "id" | "createdAt" | "updatedAt" | "isFirstLogin" | "loginAttempts" | "passwordLastChanged">,
+    password: string,
+  ) => Promise<boolean>
+  updateUser: (id: string, updates: Partial<User>) => Promise<boolean>
+  deleteUser: (id: string) => Promise<boolean>
+  changePassword: (currentPassword: string, newPassword: string) => Promise<boolean>
+  resetPassword: (email: string) => Promise<boolean>
+  getAllUsers: () => Promise<User[]>
+  getUserById: (id: string) => Promise<User | null>
+  updateUserStatus: (id: string, status: User["status"]) => Promise<boolean>
+  lockUser: (id: string, duration?: number) => Promise<boolean>
+  unlockUser: (id: string) => Promise<boolean>
+  initializeStore: () => Promise<void>
 }
 
-// Enhanced demo users with more realistic data
-const initialUsers: (User & { password: string })[] = [
-  {
-    id: "1",
-    email: "admin@villimale-hospital.mv",
-    password: "admin123",
-    firstName: "System",
-    lastName: "Administrator",
-    role: "System Administrator",
-    department: "IT",
-    status: "Active",
-    createdAt: "2024-01-01T00:00:00Z",
-    lastLogin: "2024-01-15T10:30:00Z",
-    employeeId: "EMP001",
-    phone: "+960 330-1001",
-    permissions: [
-      "Full Access",
-      "User Management",
-      "System Settings",
-      "View Reports",
-      "Manage Orders",
-      "Release Items",
-      "Approve Requests",
-      "View Inventory",
-      "Generate Reports",
-    ],
-    isFirstLogin: false,
-    passwordLastChanged: "2024-01-01T00:00:00Z",
-    loginAttempts: 0,
-    approvedBy: "system",
-    approvedAt: "2024-01-01T00:00:00Z",
-  },
-  {
-    id: "2",
-    email: "john.smith@villimale-hospital.mv",
-    password: "inventory123",
-    firstName: "John",
-    lastName: "Smith",
-    role: "Inventory Manager",
-    department: "Inventory",
-    status: "Active",
-    createdAt: "2024-01-01T00:00:00Z",
-    lastLogin: "2024-01-15T09:15:00Z",
-    employeeId: "EMP002",
-    phone: "+960 330-1002",
-    permissions: [
-      "View Inventory",
-      "Add/Edit Items",
-      "Manage Orders",
-      "Release Items",
-      "Approve Requests",
-      "View Reports",
-      "Generate Reports",
-      "Manage Suppliers",
-    ],
-    isFirstLogin: false,
-    passwordLastChanged: "2024-01-01T00:00:00Z",
-    loginAttempts: 0,
-    approvedBy: "1",
-    approvedAt: "2024-01-01T00:00:00Z",
-  },
-  {
-    id: "3",
-    email: "sarah.johnson@villimale-hospital.mv",
-    password: "doctor123",
-    firstName: "Dr. Sarah",
-    lastName: "Johnson",
-    role: "Department Head",
-    department: "Emergency",
-    status: "Active",
-    createdAt: "2024-01-01T00:00:00Z",
-    lastLogin: "2024-01-15T08:45:00Z",
-    employeeId: "DOC001",
-    phone: "+960 330-1003",
-    permissions: [
-      "View Inventory",
-      "Request Items",
-      "Approve Department Requests",
-      "View Department Reports",
-      "Manage Department Users",
-    ],
-    isFirstLogin: false,
-    passwordLastChanged: "2024-01-01T00:00:00Z",
-    loginAttempts: 0,
-    approvedBy: "1",
-    approvedAt: "2024-01-01T00:00:00Z",
-  },
-]
+const mapDbToUser = (dbUser: any): User => ({
+  id: dbUser.id,
+  email: dbUser.email,
+  firstName: dbUser.first_name,
+  lastName: dbUser.last_name,
+  role: dbUser.role,
+  department: dbUser.department,
+  status: dbUser.status,
+  employeeId: dbUser.employee_id,
+  phone: dbUser.phone,
+  permissions: dbUser.permissions || [],
+  profileImage: dbUser.profile_image,
+  isFirstLogin: dbUser.is_first_login,
+  passwordLastChanged: dbUser.password_last_changed,
+  loginAttempts: dbUser.login_attempts,
+  lockedUntil: dbUser.locked_until,
+  approvedBy: dbUser.approved_by,
+  approvedAt: dbUser.approved_at,
+  notes: dbUser.notes,
+  createdAt: dbUser.created_at,
+  updatedAt: dbUser.updated_at,
+  lastLogin: dbUser.last_login,
+})
 
-export const useAuthStore = create<AuthState>()(
+export const useAuthStore = create<AuthStore>()(
   persist(
     (set, get) => ({
-      user: null,
+      // Initial state
+      currentUser: null,
+      users: [],
       isAuthenticated: false,
-      users: initialUsers.map(({ password, ...user }) => user),
+      isLoading: false,
+      error: null,
 
+      // Login action
       login: async (email: string, password: string) => {
-        // Simulate API delay
-        await new Promise((resolve) => setTimeout(resolve, 1000))
+        try {
+          set({ isLoading: true, error: null })
 
-        const currentState = get()
-        const allUsers = [...initialUsers]
+          const { data, error } = await supabase.from("users").select("*").eq("email", email.toLowerCase()).single()
 
-        // Add any users created during the session
-        currentState.users.forEach((stateUser) => {
-          const existingIndex = allUsers.findIndex((u) => u.id === stateUser.id)
-          if (existingIndex === -1) {
-            // This is a newly created user, add with default password
-            allUsers.push({ ...stateUser, password: "temp123" } as User & { password: string })
+          if (error) {
+            if (error.code === "42P01" || error.message.includes("does not exist")) {
+              console.warn("⚠️ users table not found. Run scripts/create-tables.sql first.")
+              set({ isLoading: false, error: "Database not initialized" })
+              return false
+            }
+            throw new Error("User not found")
           }
+
+          if (!data) {
+            throw new Error("User not found")
+          }
+
+          // Check if user is locked
+          if (data.locked_until && new Date(data.locked_until) > new Date()) {
+            throw new Error("Account is temporarily locked. Please try again later.")
+          }
+
+          // Check account status
+          if (data.status !== "Active") {
+            throw new Error(`Account is ${data.status.toLowerCase()}. Please contact administrator.`)
+          }
+
+          // Verify password
+          const isValidPassword = await bcrypt.compare(password, data.password_hash)
+          if (!isValidPassword) {
+            // Increment login attempts
+            const newAttempts = (data.login_attempts || 0) + 1
+            const updates: any = { login_attempts: newAttempts }
+
+            // Lock account after 5 failed attempts
+            if (newAttempts >= 5) {
+              updates.locked_until = new Date(Date.now() + 30 * 60 * 1000).toISOString() // 30 minutes
+            }
+
+            await supabase.from("users").update(updates).eq("id", data.id)
+
+            throw new Error("Invalid password")
+          }
+
+          // Reset login attempts and update last login
+          await supabase
+            .from("users")
+            .update({
+              login_attempts: 0,
+              locked_until: null,
+              last_login: new Date().toISOString(),
+            })
+            .eq("id", data.id)
+
+          const user = mapDbToUser(data)
+          set({
+            currentUser: user,
+            isAuthenticated: true,
+            isLoading: false,
+            error: null,
+          })
+
+          return true
+        } catch (error: any) {
+          console.error("Login error:", error)
+          set({
+            error: error.message || "Login failed",
+            isLoading: false,
+            isAuthenticated: false,
+            currentUser: null,
+          })
+          return false
+        }
+      },
+
+      // Logout action
+      logout: () => {
+        set({
+          currentUser: null,
+          isAuthenticated: false,
+          error: null,
         })
+      },
 
-        const user = allUsers.find((u) => u.email === email)
+      // Register action
+      register: async (userData, password) => {
+        try {
+          set({ isLoading: true, error: null })
 
-        if (!user) {
-          return { success: false, error: "User not found" }
-        }
+          // Hash password
+          const passwordHash = await bcrypt.hash(password, 12)
 
-        // Check if account is locked
-        if (user.lockedUntil && new Date(user.lockedUntil) > new Date()) {
-          return { success: false, error: "Account is temporarily locked. Please try again later." }
-        }
+          const { data, error } = await supabase
+            .from("users")
+            .insert({
+              email: userData.email.toLowerCase(),
+              password_hash: passwordHash,
+              first_name: userData.firstName,
+              last_name: userData.lastName,
+              role: userData.role,
+              department: userData.department,
+              status: userData.status,
+              employee_id: userData.employeeId,
+              phone: userData.phone,
+              permissions: userData.permissions,
+              profile_image: userData.profileImage,
+              notes: userData.notes,
+            })
+            .select()
+            .single()
 
-        // Check if account is suspended
-        if (user.status === "Suspended") {
-          return { success: false, error: "Account has been suspended. Please contact administrator." }
-        }
+          if (error) throw error
 
-        // Check if account is pending approval
-        if (user.status === "Pending Approval") {
-          return { success: false, error: "Account is pending approval. Please wait for administrator approval." }
-        }
-
-        // Check if account is inactive
-        if (user.status === "Inactive") {
-          return { success: false, error: "Account is inactive. Please contact administrator." }
-        }
-
-        // Verify password
-        if (user.password !== password) {
-          // Increment login attempts
-          const updatedUser = { ...user, loginAttempts: user.loginAttempts + 1 }
-
-          // Lock account after 5 failed attempts
-          if (updatedUser.loginAttempts >= 5) {
-            updatedUser.lockedUntil = new Date(Date.now() + 30 * 60 * 1000).toISOString() // 30 minutes
-          }
-
-          // Update user in state
+          const newUser = mapDbToUser(data)
           set((state) => ({
-            users: state.users.map((u) => (u.id === user.id ? updatedUser : u)),
+            users: [...state.users, newUser],
+            isLoading: false,
           }))
 
-          return {
-            success: false,
-            error: `Invalid password. ${5 - updatedUser.loginAttempts} attempts remaining.`,
-          }
-        }
-
-        // Reset login attempts on successful login
-        const { password: _, ...userWithoutPassword } = user
-        const updatedUser = {
-          ...userWithoutPassword,
-          lastLogin: new Date().toISOString(),
-          loginAttempts: 0,
-          lockedUntil: undefined,
-        }
-
-        // Update user in state
-        set((state) => ({
-          user: updatedUser,
-          isAuthenticated: true,
-          users: state.users.map((u) => (u.id === user.id ? updatedUser : u)),
-        }))
-
-        return {
-          success: true,
-          requiresPasswordChange: user.isFirstLogin,
+          return true
+        } catch (error: any) {
+          console.error("Registration error:", error)
+          set({
+            error: error.message || "Registration failed",
+            isLoading: false,
+          })
+          return false
         }
       },
 
-      logout: () => {
-        set({ user: null, isAuthenticated: false })
+      // Update user action
+      updateUser: async (id, updates) => {
+        try {
+          set({ isLoading: true, error: null })
+
+          const dbUpdates: any = {}
+          if (updates.email !== undefined) dbUpdates.email = updates.email.toLowerCase()
+          if (updates.firstName !== undefined) dbUpdates.first_name = updates.firstName
+          if (updates.lastName !== undefined) dbUpdates.last_name = updates.lastName
+          if (updates.role !== undefined) dbUpdates.role = updates.role
+          if (updates.department !== undefined) dbUpdates.department = updates.department
+          if (updates.status !== undefined) dbUpdates.status = updates.status
+          if (updates.employeeId !== undefined) dbUpdates.employee_id = updates.employeeId
+          if (updates.phone !== undefined) dbUpdates.phone = updates.phone
+          if (updates.permissions !== undefined) dbUpdates.permissions = updates.permissions
+          if (updates.profileImage !== undefined) dbUpdates.profile_image = updates.profileImage
+          if (updates.notes !== undefined) dbUpdates.notes = updates.notes
+
+          const { data, error } = await supabase.from("users").update(dbUpdates).eq("id", id).select().single()
+
+          if (error) throw error
+
+          const updatedUser = mapDbToUser(data)
+          set((state) => ({
+            users: state.users.map((user) => (user.id === id ? updatedUser : user)),
+            currentUser: state.currentUser?.id === id ? updatedUser : state.currentUser,
+            isLoading: false,
+          }))
+
+          return true
+        } catch (error: any) {
+          console.error("Update user error:", error)
+          set({
+            error: error.message || "Failed to update user",
+            isLoading: false,
+          })
+          return false
+        }
       },
 
-      register: async (userData) => {
-        // Simulate API delay
-        await new Promise((resolve) => setTimeout(resolve, 1500))
+      // Delete user action
+      deleteUser: async (id) => {
+        try {
+          set({ isLoading: true, error: null })
 
-        const currentState = get()
+          const { error } = await supabase.from("users").delete().eq("id", id)
 
-        // Check if user already exists
-        const existingUser = currentState.users.find((u) => u.email === userData.email)
-        if (existingUser) {
-          return { success: false, error: "User with this email already exists" }
+          if (error) throw error
+
+          set((state) => ({
+            users: state.users.filter((user) => user.id !== id),
+            isLoading: false,
+          }))
+
+          return true
+        } catch (error: any) {
+          console.error("Delete user error:", error)
+          set({
+            error: error.message || "Failed to delete user",
+            isLoading: false,
+          })
+          return false
         }
-
-        // Check if employee ID already exists
-        if (userData.employeeId) {
-          const existingEmployeeId = currentState.users.find((u) => u.employeeId === userData.employeeId)
-          if (existingEmployeeId) {
-            return { success: false, error: "Employee ID already exists" }
-          }
-        }
-
-        // Get default permissions for role
-        const defaultPermissions = getRolePermissions(userData.role)
-
-        // Create new user
-        const newUser: User = {
-          id: Date.now().toString(),
-          email: userData.email,
-          firstName: userData.firstName,
-          lastName: userData.lastName,
-          role: userData.role as User["role"],
-          department: userData.department,
-          employeeId: userData.employeeId,
-          phone: userData.phone,
-          status: "Pending Approval", // New registrations require approval
-          permissions: defaultPermissions,
-          createdAt: new Date().toISOString(),
-          isFirstLogin: true,
-          loginAttempts: 0,
-        }
-
-        set((state) => ({
-          users: [...state.users, newUser],
-        }))
-
-        return { success: true }
       },
 
-      createUser: async (userData) => {
-        // Simulate API delay
-        await new Promise((resolve) => setTimeout(resolve, 1000))
-
-        const currentState = get()
-
-        // Check if user already exists
-        const existingUser = currentState.users.find((u) => u.email === userData.email)
-        if (existingUser) {
-          return { success: false, error: "User with this email already exists" }
-        }
-
-        // Check if employee ID already exists
-        if (userData.employeeId) {
-          const existingEmployeeId = currentState.users.find((u) => u.employeeId === userData.employeeId)
-          if (existingEmployeeId) {
-            return { success: false, error: "Employee ID already exists" }
-          }
-        }
-
-        const currentUser = currentState.user
-        if (!currentUser) {
-          return { success: false, error: "Not authenticated" }
-        }
-
-        // Create new user
-        const newUser: User = {
-          id: Date.now().toString(),
-          email: userData.email,
-          firstName: userData.firstName,
-          lastName: userData.lastName,
-          role: userData.role as User["role"],
-          department: userData.department,
-          employeeId: userData.employeeId,
-          phone: userData.phone,
-          status: (userData.status as User["status"]) || "Active",
-          permissions: userData.permissions,
-          createdAt: new Date().toISOString(),
-          isFirstLogin: true,
-          loginAttempts: 0,
-          approvedBy: currentUser.id,
-          approvedAt: new Date().toISOString(),
-          notes: userData.notes,
-        }
-
-        set((state) => ({
-          users: [...state.users, newUser],
-        }))
-
-        return { success: true }
-      },
-
-      updateUser: async (userId, updates) => {
-        // Simulate API delay
-        await new Promise((resolve) => setTimeout(resolve, 500))
-
-        const currentState = get()
-        const userExists = currentState.users.find((u) => u.id === userId)
-        if (!userExists) {
-          return { success: false, error: "User not found" }
-        }
-
-        // Update user
-        set((state) => {
-          const updatedUsers = state.users.map((u) => (u.id === userId ? { ...u, ...updates } : u))
-
-          // Update current user if it's the same user
-          const updatedCurrentUser = state.user && state.user.id === userId ? { ...state.user, ...updates } : state.user
-
-          return {
-            users: updatedUsers,
-            user: updatedCurrentUser,
-          }
-        })
-
-        return { success: true }
-      },
-
-      deleteUser: async (userId) => {
-        // Simulate API delay
-        await new Promise((resolve) => setTimeout(resolve, 500))
-
-        const currentState = get()
-        const userExists = currentState.users.find((u) => u.id === userId)
-        if (!userExists) {
-          return { success: false, error: "User not found" }
-        }
-
-        set((state) => ({
-          users: state.users.filter((u) => u.id !== userId),
-        }))
-
-        return { success: true }
-      },
-
-      approveUser: async (userId, approverId) => {
-        // Simulate API delay
-        await new Promise((resolve) => setTimeout(resolve, 500))
-
-        const currentState = get()
-        const userExists = currentState.users.find((u) => u.id === userId)
-        if (!userExists) {
-          return { success: false, error: "User not found" }
-        }
-
-        set((state) => ({
-          users: state.users.map((u) =>
-            u.id === userId
-              ? {
-                  ...u,
-                  status: "Active" as const,
-                  approvedBy: approverId,
-                  approvedAt: new Date().toISOString(),
-                }
-              : u,
-          ),
-        }))
-
-        return { success: true }
-      },
-
-      suspendUser: async (userId, reason) => {
-        // Simulate API delay
-        await new Promise((resolve) => setTimeout(resolve, 500))
-
-        const currentState = get()
-        const userExists = currentState.users.find((u) => u.id === userId)
-        if (!userExists) {
-          return { success: false, error: "User not found" }
-        }
-
-        set((state) => ({
-          users: state.users.map((u) =>
-            u.id === userId
-              ? {
-                  ...u,
-                  status: "Suspended" as const,
-                  notes: reason,
-                }
-              : u,
-          ),
-        }))
-
-        return { success: true }
-      },
-
-      resetPassword: async (userId, newPassword) => {
-        // Simulate API delay
-        await new Promise((resolve) => setTimeout(resolve, 500))
-
-        const currentState = get()
-        const userExists = currentState.users.find((u) => u.id === userId)
-        if (!userExists) {
-          return { success: false, error: "User not found" }
-        }
-
-        set((state) => ({
-          users: state.users.map((u) =>
-            u.id === userId
-              ? {
-                  ...u,
-                  isFirstLogin: true,
-                  passwordLastChanged: new Date().toISOString(),
-                }
-              : u,
-          ),
-        }))
-
-        return { success: true }
-      },
-
+      // Change password action
       changePassword: async (currentPassword, newPassword) => {
-        // Simulate API delay
-        await new Promise((resolve) => setTimeout(resolve, 500))
+        try {
+          const { currentUser } = get()
+          if (!currentUser) throw new Error("Not authenticated")
 
-        const currentUser = get().user
-        if (!currentUser) {
-          return { success: false, error: "Not authenticated" }
+          set({ isLoading: true, error: null })
+
+          // Get current user data
+          const { data, error } = await supabase.from("users").select("password_hash").eq("id", currentUser.id).single()
+
+          if (error) throw error
+
+          // Verify current password
+          const isValidPassword = await bcrypt.compare(currentPassword, data.password_hash)
+          if (!isValidPassword) {
+            throw new Error("Current password is incorrect")
+          }
+
+          // Hash new password
+          const newPasswordHash = await bcrypt.hash(newPassword, 12)
+
+          // Update password
+          const { error: updateError } = await supabase
+            .from("users")
+            .update({
+              password_hash: newPasswordHash,
+              password_last_changed: new Date().toISOString(),
+              is_first_login: false,
+            })
+            .eq("id", currentUser.id)
+
+          if (updateError) throw updateError
+
+          set({ isLoading: false })
+          return true
+        } catch (error: any) {
+          console.error("Change password error:", error)
+          set({
+            error: error.message || "Failed to change password",
+            isLoading: false,
+          })
+          return false
         }
-
-        // In a real app, you'd verify the current password here
-        // For demo purposes, we'll assume it's correct
-
-        set((state) => ({
-          user: state.user
-            ? {
-                ...state.user,
-                isFirstLogin: false,
-                passwordLastChanged: new Date().toISOString(),
-              }
-            : null,
-          users: state.users.map((u) =>
-            u.id === currentUser.id
-              ? {
-                  ...u,
-                  isFirstLogin: false,
-                  passwordLastChanged: new Date().toISOString(),
-                }
-              : u,
-          ),
-        }))
-
-        return { success: true }
       },
 
-      getAllUsers: () => {
-        return get().users
+      // Reset password action
+      resetPassword: async (email) => {
+        try {
+          set({ isLoading: true, error: null })
+
+          // Generate temporary password
+          const tempPassword = Math.random().toString(36).slice(-8)
+          const passwordHash = await bcrypt.hash(tempPassword, 12)
+
+          const { error } = await supabase
+            .from("users")
+            .update({
+              password_hash: passwordHash,
+              is_first_login: true,
+              password_last_changed: new Date().toISOString(),
+            })
+            .eq("email", email.toLowerCase())
+
+          if (error) throw error
+
+          // In a real app, you would send this via email
+          console.log(`Temporary password for ${email}: ${tempPassword}`)
+
+          set({ isLoading: false })
+          return true
+        } catch (error: any) {
+          console.error("Reset password error:", error)
+          set({
+            error: error.message || "Failed to reset password",
+            isLoading: false,
+          })
+          return false
+        }
       },
 
-      getUserById: (userId) => {
-        return get().users.find((u) => u.id === userId)
+      // Get all users action
+      getAllUsers: async () => {
+        try {
+          set({ isLoading: true, error: null })
+
+          const { data, error } = await supabase.from("users").select("*").order("created_at", { ascending: false })
+
+          if (error) {
+            if (error.code === "42P01" || error.message.includes("does not exist")) {
+              console.warn("⚠️ users table not found. Run scripts/create-tables.sql first.")
+              set({ users: [], isLoading: false })
+              return []
+            }
+            throw error
+          }
+
+          const users = data?.map(mapDbToUser) || []
+          set({ users, isLoading: false })
+          return users
+        } catch (error: any) {
+          console.error("Get all users error:", error)
+          set({
+            error: error.message || "Failed to load users",
+            isLoading: false,
+          })
+          return []
+        }
       },
 
-      hasPermission: (permission) => {
-        const currentUser = get().user
-        if (!currentUser) return false
-        return currentUser.permissions.includes(permission) || currentUser.permissions.includes("Full Access")
+      // Get user by ID action
+      getUserById: async (id) => {
+        try {
+          const { data, error } = await supabase.from("users").select("*").eq("id", id).single()
+
+          if (error) throw error
+
+          return mapDbToUser(data)
+        } catch (error: any) {
+          console.error("Get user by ID error:", error)
+          return null
+        }
+      },
+
+      // Update user status action
+      updateUserStatus: async (id, status) => {
+        try {
+          set({ isLoading: true, error: null })
+
+          const { data, error } = await supabase.from("users").update({ status }).eq("id", id).select().single()
+
+          if (error) throw error
+
+          const updatedUser = mapDbToUser(data)
+          set((state) => ({
+            users: state.users.map((user) => (user.id === id ? updatedUser : user)),
+            isLoading: false,
+          }))
+
+          return true
+        } catch (error: any) {
+          console.error("Update user status error:", error)
+          set({
+            error: error.message || "Failed to update user status",
+            isLoading: false,
+          })
+          return false
+        }
+      },
+
+      // Lock user action
+      lockUser: async (id, duration = 30) => {
+        try {
+          set({ isLoading: true, error: null })
+
+          const lockedUntil = new Date(Date.now() + duration * 60 * 1000).toISOString()
+
+          const { data, error } = await supabase
+            .from("users")
+            .update({ locked_until: lockedUntil })
+            .eq("id", id)
+            .select()
+            .single()
+
+          if (error) throw error
+
+          const updatedUser = mapDbToUser(data)
+          set((state) => ({
+            users: state.users.map((user) => (user.id === id ? updatedUser : user)),
+            isLoading: false,
+          }))
+
+          return true
+        } catch (error: any) {
+          console.error("Lock user error:", error)
+          set({
+            error: error.message || "Failed to lock user",
+            isLoading: false,
+          })
+          return false
+        }
+      },
+
+      // Unlock user action
+      unlockUser: async (id) => {
+        try {
+          set({ isLoading: true, error: null })
+
+          const { data, error } = await supabase
+            .from("users")
+            .update({
+              locked_until: null,
+              login_attempts: 0,
+            })
+            .eq("id", id)
+            .select()
+            .single()
+
+          if (error) throw error
+
+          const updatedUser = mapDbToUser(data)
+          set((state) => ({
+            users: state.users.map((user) => (user.id === id ? updatedUser : user)),
+            isLoading: false,
+          }))
+
+          return true
+        } catch (error: any) {
+          console.error("Unlock user error:", error)
+          set({
+            error: error.message || "Failed to unlock user",
+            isLoading: false,
+          })
+          return false
+        }
+      },
+
+      // Initialize store
+      initializeStore: async () => {
+        await get().getAllUsers()
       },
     }),
     {
-      name: "auth-storage",
-      partialize: (state) => ({
-        user: state.user,
-        isAuthenticated: state.isAuthenticated,
-        users: state.users,
-      }),
+      name: "auth-store",
+      version: 1,
+      migrate: (persistedState: any, version: number) => {
+        return persistedState
+      },
     },
   ),
 )
-
-// Helper function to get default permissions for a role
-function getRolePermissions(role: string): string[] {
-  const rolePermissions: Record<string, string[]> = {
-    "System Administrator": [
-      "Full Access",
-      "User Management",
-      "System Settings",
-      "View Reports",
-      "Manage Orders",
-      "Release Items",
-      "Approve Requests",
-      "View Inventory",
-      "Generate Reports",
-    ],
-    "Inventory Manager": [
-      "View Inventory",
-      "Add/Edit Items",
-      "Manage Orders",
-      "Release Items",
-      "Approve Requests",
-      "View Reports",
-      "Generate Reports",
-      "Manage Suppliers",
-    ],
-    "Department Head": [
-      "View Inventory",
-      "Request Items",
-      "Approve Department Requests",
-      "View Department Reports",
-      "Manage Department Users",
-    ],
-    Doctor: ["View Inventory", "Request Items", "View Request Status"],
-    "Nurse Manager": ["View Inventory", "Request Items", "Approve Nursing Requests", "View Department Reports"],
-    Pharmacist: [
-      "View Inventory",
-      "Request Items",
-      "Manage Medications",
-      "View Pharmacy Reports",
-      "Track Controlled Substances",
-    ],
-    "Inventory Staff": ["View Inventory", "Release Items", "Update Stock", "Process Requests"],
-    "Department Staff": ["View Inventory", "Request Items"],
-  }
-
-  return rolePermissions[role] || ["View Inventory", "Request Items"]
-}

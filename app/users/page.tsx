@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Layout } from "@/components/layout"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -45,6 +45,7 @@ export default function UsersPage() {
     deleteUser,
     resetPassword,
     user: currentUser,
+    initializeStore,
   } = useAuthStore()
   const [searchTerm, setSearchTerm] = useState("")
   const [statusFilter, setStatusFilter] = useState("all")
@@ -53,6 +54,11 @@ export default function UsersPage() {
   const [actionType, setActionType] = useState<"approve" | "suspend" | "delete" | "reset" | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [message, setMessage] = useState("")
+
+  useEffect(() => {
+    // Initialize store when component mounts
+    initializeStore()
+  }, [initializeStore])
 
   // Check if user has permission to view users
   if (!hasPermission("User Management") && !hasPermission("View Reports")) {
