@@ -118,8 +118,8 @@ export const useAuthStore = create<AuthStore>()(
             throw new Error(`Account is ${data.status.toLowerCase()}. Please contact administrator.`)
           }
 
-          // Verify password
-          const isValidPassword = await bcrypt.compare(password, data.password_hash)
+          // Verify password *synchronously* – async version in bcryptjs is callback-based
+          const isValidPassword = bcrypt.compareSync(password, data.password_hash)
           if (!isValidPassword) {
             // Increment login attempts
             const newAttempts = (data.login_attempts || 0) + 1
@@ -300,7 +300,7 @@ export const useAuthStore = create<AuthStore>()(
           if (error) throw error
 
           // Verify current password
-          const isValidPassword = await bcrypt.compare(currentPassword, data.password_hash)
+          const isValidPassword = bcrypt.compareSync(currentPassword, data.password_hash)
           if (!isValidPassword) {
             throw new Error("Current password is incorrect")
           }

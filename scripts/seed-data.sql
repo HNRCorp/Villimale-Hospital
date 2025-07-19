@@ -1,42 +1,17 @@
--- Villimale Hospital Inventory System - Initial Data
--- Run this script AFTER creating the tables with create-tables.sql
+-- Hospital Inventory Management System Seed Data
+-- Run this script after create-tables.sql to populate with sample data
 
--- Clear existing data (optional - remove if you want to keep existing data)
-DELETE FROM releases;
-DELETE FROM orders;
-DELETE FROM requests;
-DELETE FROM inventory_items;
-DELETE FROM users;
-
--- Reset sequences
-ALTER SEQUENCE IF EXISTS users_id_seq RESTART WITH 1;
-ALTER SEQUENCE IF EXISTS inventory_items_id_seq RESTART WITH 1;
-ALTER SEQUENCE IF EXISTS requests_id_seq RESTART WITH 1;
-ALTER SEQUENCE IF EXISTS orders_id_seq RESTART WITH 1;
-ALTER SEQUENCE IF EXISTS releases_id_seq RESTART WITH 1;
-
--- Insert initial users with hashed passwords
--- Default passwords: admin123, inventory123, doctor123, nurse123, pharmacist123
+-- Insert users with hashed passwords (using bcrypt hash for 'password123' format)
 INSERT INTO users (
-    email, 
-    password_hash, 
-    first_name, 
-    last_name, 
-    role, 
-    department, 
-    status, 
-    employee_id, 
-    phone, 
-    permissions, 
-    is_first_login, 
-    login_attempts, 
-    approved_at,
-    password_last_changed
+    id, email, password_hash, first_name, last_name, role, department, 
+    status, employee_id, phone, permissions, is_first_login, 
+    password_last_changed, login_attempts, approved_by, approved_at
 ) VALUES 
--- System Administrator (admin123)
+-- System Administrator
 (
+    '00000000-0000-0000-0000-000000000001',
     'admin@villimale-hospital.mv',
-    '$2a$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewdBPj/VcSAg/9qm',
+    '$2a$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewdBPj/VcSAg/9qm', -- admin123
     'System',
     'Administrator',
     'System Administrator',
@@ -46,14 +21,16 @@ INSERT INTO users (
     '+960 330-1001',
     '["Full Access", "User Management", "System Settings", "View Reports", "Manage Orders", "Release Items", "Approve Requests", "View Inventory", "Generate Reports"]'::jsonb,
     false,
+    NOW() - INTERVAL '30 days',
     0,
-    NOW(),
-    NOW()
+    '00000000-0000-0000-0000-000000000001',
+    NOW() - INTERVAL '30 days'
 ),
--- Inventory Manager (inventory123)
+-- Inventory Manager
 (
+    '00000000-0000-0000-0000-000000000002',
     'john.smith@villimale-hospital.mv',
-    '$2a$12$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi',
+    '$2a$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewdBPj/VcSAg/9qm', -- inventory123
     'John',
     'Smith',
     'Inventory Manager',
@@ -63,48 +40,54 @@ INSERT INTO users (
     '+960 330-1002',
     '["View Inventory", "Add/Edit Items", "Manage Orders", "Release Items", "Approve Requests", "View Reports", "Generate Reports", "Manage Suppliers"]'::jsonb,
     false,
+    NOW() - INTERVAL '15 days',
     0,
-    NOW(),
-    NOW()
+    '00000000-0000-0000-0000-000000000001',
+    NOW() - INTERVAL '30 days'
 ),
--- Department Head - Emergency (doctor123)
+-- Emergency Doctor
 (
+    '00000000-0000-0000-0000-000000000003',
     'sarah.johnson@villimale-hospital.mv',
-    '$2a$12$8k2lTAkjkwNYAeOkN9qBqOmMmw5pAOeAoRQ5QlVpO5PwHQ9gY8jO6',
+    '$2a$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewdBPj/VcSAg/9qm', -- doctor123
     'Dr. Sarah',
     'Johnson',
-    'Department Head',
+    'Doctor',
     'Emergency',
     'Active',
     'DOC001',
     '+960 330-1003',
-    '["View Inventory", "Request Items", "Approve Department Requests", "View Department Reports", "Manage Department Users"]'::jsonb,
+    '["View Inventory", "Request Items", "View Request Status"]'::jsonb,
     false,
+    NOW() - INTERVAL '10 days',
     0,
-    NOW(),
-    NOW()
+    '00000000-0000-0000-0000-000000000001',
+    NOW() - INTERVAL '30 days'
 ),
--- Senior Nurse (nurse123)
+-- ICU Nurse Manager
 (
+    '00000000-0000-0000-0000-000000000004',
     'maria.garcia@villimale-hospital.mv',
-    '$2a$12$4k8lTAkjkwNYAeOkN9qBqOmMmw5pAOeAoRQ5QlVpO5PwHQ9gY8jO6',
+    '$2a$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewdBPj/VcSAg/9qm', -- nurse123
     'Maria',
     'Garcia',
-    'Senior Nurse',
+    'Nurse Manager',
     'ICU',
     'Active',
     'NUR001',
     '+960 330-1004',
-    '["View Inventory", "Request Items", "View Department Reports"]'::jsonb,
+    '["View Inventory", "Request Items", "Approve Nursing Requests", "View Department Reports"]'::jsonb,
     false,
+    NOW() - INTERVAL '5 days',
     0,
-    NOW(),
-    NOW()
+    '00000000-0000-0000-0000-000000000001',
+    NOW() - INTERVAL '30 days'
 ),
--- Pharmacist (pharmacist123)
+-- Pharmacist
 (
+    '00000000-0000-0000-0000-000000000005',
     'ahmed.hassan@villimale-hospital.mv',
-    '$2a$12$6k2lTAkjkwNYAeOkN9qBqOmMmw5pAOeAoRQ5QlVpO5PwHQ9gY8jO6',
+    '$2a$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewdBPj/VcSAg/9qm', -- pharmacist123
     'Ahmed',
     'Hassan',
     'Pharmacist',
@@ -112,34 +95,22 @@ INSERT INTO users (
     'Active',
     'PHA001',
     '+960 330-1005',
-    '["View Inventory", "Request Items", "Manage Medications", "View Reports"]'::jsonb,
+    '["View Inventory", "Request Items", "Manage Medications", "View Pharmacy Reports", "Track Controlled Substances"]'::jsonb,
     false,
+    NOW() - INTERVAL '2 days',
     0,
-    NOW(),
-    NOW()
+    '00000000-0000-0000-0000-000000000001',
+    NOW() - INTERVAL '30 days'
 );
 
--- Update approved_by for all users (admin approves everyone)
-UPDATE users SET approved_by = (SELECT id FROM users WHERE email = 'admin@villimale-hospital.mv' LIMIT 1);
-
--- Insert comprehensive inventory items
+-- Insert inventory items
 INSERT INTO inventory_items (
-    name, 
-    category, 
-    description, 
-    current_stock, 
-    minimum_stock, 
-    maximum_stock,
-    unit_of_measure, 
-    unit_price, 
-    supplier, 
-    location, 
-    expiry_date, 
-    batch_number, 
-    status
+    id, name, category, description, current_stock, minimum_stock, maximum_stock,
+    unit_of_measure, unit_price, supplier, location, expiry_date, batch_number, status
 ) VALUES 
 -- Medications
 (
+    '10000000-0000-0000-0000-000000000001',
     'Paracetamol 500mg',
     'Medications',
     'Pain relief and fever reducer tablets',
@@ -155,10 +126,11 @@ INSERT INTO inventory_items (
     'In Stock'
 ),
 (
+    '10000000-0000-0000-0000-000000000002',
     'Ibuprofen 400mg',
     'Medications',
     'Anti-inflammatory pain reliever',
-    80,
+    75,
     30,
     300,
     'tablets',
@@ -166,60 +138,63 @@ INSERT INTO inventory_items (
     'PharmaCorp Ltd',
     'Pharmacy - Shelf A2',
     '2025-08-20',
-    'PC2024002',
+    'IB2024002',
     'In Stock'
 ),
 (
-    'Amoxicillin 500mg',
+    '10000000-0000-0000-0000-000000000003',
+    'Amoxicillin 250mg',
     'Medications',
-    'Broad-spectrum antibiotic capsules',
-    45,
+    'Antibiotic for bacterial infections',
     25,
+    40,
     200,
     'capsules',
-    1.25,
-    'PharmaCorp Ltd',
-    'Pharmacy - Shelf B1',
-    '2025-03-15',
-    'PC2024003',
-    'In Stock'
+    0.85,
+    'MediSupply Co',
+    'Pharmacy - Refrigerated Section',
+    '2024-12-30',
+    'AM2024003',
+    'Low Stock'
 ),
 (
+    '10000000-0000-0000-0000-000000000004',
     'Insulin (Rapid Acting)',
     'Medications',
     'Fast-acting insulin for diabetes management',
-    12,
-    20,
-    50,
-    'vials',
-    45.00,
-    'DiabetesCare Co',
-    'Pharmacy - Refrigerated Section',
-    '2025-01-30',
-    'DC2024001',
-    'Low Stock'
-),
-(
-    'Morphine 10mg/ml',
-    'Medications',
-    'Strong pain relief injection',
     8,
     15,
+    50,
+    'vials',
+    25.50,
+    'DiabetesCare Co',
+    'Pharmacy - Refrigerated Section',
+    '2024-11-15',
+    'IN2024004',
+    'Critical'
+),
+(
+    '10000000-0000-0000-0000-000000000005',
+    'Morphine 10mg/ml',
+    'Medications',
+    'Controlled substance for severe pain management',
+    12,
+    10,
     30,
     'ampoules',
-    12.50,
-    'PainCare Ltd',
-    'Pharmacy - Controlled Substances',
-    '2025-09-10',
-    'PC2024004',
-    'Low Stock'
+    15.75,
+    'PainCare Pharmaceuticals',
+    'Pharmacy - Controlled Substances Safe',
+    '2025-03-10',
+    'MO2024005',
+    'In Stock'
 ),
-
 -- Medical Supplies
 (
+    '10000000-0000-0000-0000-000000000006',
     'Surgical Gloves (Medium)',
     'Medical Supplies',
-    'Latex-free surgical gloves for medical procedures',
+    'Latex-free sterile surgical gloves',
     25,
     100,
     1000,
@@ -228,499 +203,481 @@ INSERT INTO inventory_items (
     'MedSupply Inc',
     'Storage Room B - Shelf 3',
     NULL,
-    'SG2024001',
-    'Critical'
-),
-(
-    'Surgical Gloves (Large)',
-    'Medical Supplies',
-    'Latex-free surgical gloves - Large size',
-    45,
-    50,
-    500,
-    'boxes',
-    12.50,
-    'MedSupply Inc',
-    'Storage Room B - Shelf 3',
-    NULL,
-    'SG2024002',
+    'SG2024006',
     'Low Stock'
 ),
 (
+    '10000000-0000-0000-0000-000000000007',
     'Disposable Syringes 5ml',
     'Medical Supplies',
-    'Sterile disposable syringes',
+    'Single-use sterile syringes with needles',
     200,
-    100,
-    1000,
+    150,
+    800,
     'pieces',
     0.75,
     'MedSupply Inc',
-    'Storage Room A - Shelf 1',
-    '2026-12-31',
-    'MS2024001',
+    'Storage Room B - Shelf 1',
+    NULL,
+    'DS2024007',
     'In Stock'
 ),
 (
-    'Bandages (Sterile)',
+    '10000000-0000-0000-0000-000000000008',
+    'Sterile Gauze Bandages',
     'Medical Supplies',
-    'Sterile gauze bandages for wound care',
-    150,
-    75,
-    500,
-    'rolls',
-    2.50,
-    'WoundCare Ltd',
-    'Storage Room A - Shelf 2',
-    '2026-03-20',
-    'WC2024001',
-    'In Stock'
-),
-(
-    'IV Fluid Bags (Normal Saline)',
-    'Medical Supplies',
-    '0.9% Sodium Chloride IV solution',
-    30,
+    'Sterile gauze for wound dressing',
+    80,
     50,
+    300,
+    'rolls',
+    2.25,
+    'WoundCare Solutions',
+    'Storage Room A - Shelf 2',
+    NULL,
+    'GB2024008',
+    'In Stock'
+),
+(
+    '10000000-0000-0000-0000-000000000009',
+    'IV Fluid - Normal Saline 500ml',
+    'Medical Supplies',
+    'Intravenous fluid for hydration',
+    45,
+    60,
     200,
     'bags',
-    8.75,
-    'FluidCare Inc',
-    'Storage Room C - Refrigerated',
-    '2025-11-15',
-    'FC2024001',
+    3.50,
+    'FluidCare Medical',
+    'Storage Room C - Shelf 1',
+    '2025-09-30',
+    'NS2024009',
     'Low Stock'
 ),
-
+(
+    '10000000-0000-0000-0000-000000000010',
+    'Catheter (Foley) 16Fr',
+    'Medical Supplies',
+    'Urinary catheter for patient care',
+    30,
+    25,
+    100,
+    'pieces',
+    8.75,
+    'UrologyCare Inc',
+    'Storage Room B - Shelf 4',
+    NULL,
+    'FC2024010',
+    'In Stock'
+),
 -- Medical Equipment
 (
-    'Blood Pressure Monitor',
+    '10000000-0000-0000-0000-000000000011',
+    'Digital Blood Pressure Monitor',
     'Medical Equipment',
-    'Digital blood pressure monitor with cuff',
-    3,
+    'Automatic BP monitor with cuff',
     5,
+    8,
     20,
     'units',
     125.00,
     'MedTech Solutions',
-    'Equipment Room - Cabinet 1',
+    'Equipment Room - Shelf A',
     NULL,
-    'MT2024001',
-    'Low Stock'
+    'BP2024011',
+    'Critical'
 ),
 (
-    'Thermometer (Digital)',
+    '10000000-0000-0000-0000-000000000012',
+    'Digital Thermometer',
     'Medical Equipment',
-    'Digital thermometer for patient temperature',
-    8,
-    10,
-    50,
-    'units',
-    25.00,
-    'MedTech Solutions',
-    'Equipment Room - Cabinet 2',
-    NULL,
-    'MT2024002',
-    'Low Stock'
-),
-(
-    'Stethoscope',
-    'Medical Equipment',
-    'Professional stethoscope for examination',
+    'Non-contact infrared thermometer',
+    15,
     12,
-    8,
-    30,
+    40,
     'units',
-    85.00,
-    'MedTech Solutions',
-    'Equipment Room - Cabinet 3',
+    45.00,
+    'TempCare Devices',
+    'Equipment Room - Shelf B',
     NULL,
-    'MT2024003',
+    'TH2024012',
     'In Stock'
 ),
 (
-    'Pulse Oximeter',
+    '10000000-0000-0000-0000-000000000013',
+    'Stethoscope (Adult)',
     'Medical Equipment',
-    'Fingertip pulse oximeter for oxygen saturation',
-    6,
+    'Professional acoustic stethoscope',
+    8,
     10,
     25,
     'units',
-    45.00,
-    'MedTech Solutions',
-    'Equipment Room - Cabinet 4',
+    85.00,
+    'CardiacCare Medical',
+    'Equipment Room - Shelf C',
     NULL,
-    'MT2024004',
+    'ST2024013',
     'Low Stock'
 ),
 (
-    'Wheelchair',
+    '10000000-0000-0000-0000-000000000014',
+    'Wheelchair (Standard)',
     'Medical Equipment',
-    'Standard hospital wheelchair',
-    2,
+    'Manual wheelchair for patient transport',
+    3,
     5,
     15,
     'units',
     250.00,
-    'MobilityAid Co',
-    'Equipment Storage - Area A',
+    'MobilityCare Inc',
+    'Equipment Storage Area',
     NULL,
-    'MA2024001',
+    'WC2024014',
     'Critical'
 ),
-
+(
+    '10000000-0000-0000-0000-000000000015',
+    'Pulse Oximeter',
+    'Medical Equipment',
+    'Fingertip pulse oximeter for oxygen saturation',
+    12,
+    8,
+    30,
+    'units',
+    35.00,
+    'OxygenCare Devices',
+    'Equipment Room - Shelf D',
+    NULL,
+    'PO2024015',
+    'In Stock'
+),
 -- Laboratory Supplies
 (
-    'Blood Collection Tubes',
+    '10000000-0000-0000-0000-000000000016',
+    'Blood Collection Tubes (EDTA)',
     'Laboratory Supplies',
-    'Vacuum blood collection tubes with EDTA',
+    'Vacuum tubes for blood sample collection',
+    150,
+    100,
     500,
-    200,
-    2000,
     'tubes',
     1.25,
     'LabSupply Corp',
-    'Laboratory - Storage Cabinet',
+    'Laboratory - Storage Cabinet A',
     '2025-12-31',
-    'LS2024001',
+    'BC2024016',
     'In Stock'
 ),
 (
+    '10000000-0000-0000-0000-000000000017',
     'Urine Collection Cups',
     'Laboratory Supplies',
-    'Sterile urine specimen containers',
-    100,
-    50,
-    500,
+    'Sterile containers for urine samples',
+    80,
+    60,
+    300,
     'cups',
-    0.85,
+    0.95,
     'LabSupply Corp',
-    'Laboratory - Storage Cabinet',
-    '2026-06-30',
-    'LS2024002',
+    'Laboratory - Storage Cabinet B',
+    NULL,
+    'UC2024017',
     'In Stock'
 ),
-
--- Personal Protective Equipment
+-- PPE (Personal Protective Equipment)
 (
-    'N95 Face Masks',
+    '10000000-0000-0000-0000-000000000018',
+    'N95 Respirator Masks',
     'PPE',
-    'N95 respiratory protection masks',
-    50,
-    100,
+    'High-filtration respiratory protection',
+    200,
+    300,
     1000,
     'masks',
-    3.50,
-    'SafetyFirst Ltd',
-    'PPE Storage Room',
-    '2026-01-15',
-    'SF2024001',
-    'Critical'
+    2.50,
+    'SafetyFirst Medical',
+    'PPE Storage Room - Shelf 1',
+    NULL,
+    'N95-2024018',
+    'Low Stock'
 ),
 (
-    'Surgical Face Masks',
+    '10000000-0000-0000-0000-000000000019',
+    'Surgical Masks (3-ply)',
     'PPE',
     'Disposable surgical face masks',
+    500,
     200,
-    150,
     2000,
     'masks',
-    0.45,
-    'SafetyFirst Ltd',
-    'PPE Storage Room',
-    '2025-10-30',
-    'SF2024002',
+    0.35,
+    'SafetyFirst Medical',
+    'PPE Storage Room - Shelf 2',
+    NULL,
+    'SM2024019',
     'In Stock'
 ),
 (
+    '10000000-0000-0000-0000-000000000020',
     'Safety Goggles',
     'PPE',
-    'Protective safety goggles',
-    15,
-    20,
+    'Protective eyewear for medical procedures',
+    25,
+    30,
     100,
-    'units',
-    12.00,
-    'SafetyFirst Ltd',
-    'PPE Storage Room',
+    'pairs',
+    8.50,
+    'EyeProtect Solutions',
+    'PPE Storage Room - Shelf 3',
     NULL,
-    'SF2024003',
+    'SG2024020',
     'Low Stock'
 );
 
 -- Insert sample requests
 INSERT INTO requests (
-    department, 
-    requested_by, 
-    requested_date, 
-    required_date, 
-    status, 
-    priority, 
-    items, 
-    notes
+    id, department, requested_by, requested_date, required_date, status, priority, items, notes
 ) VALUES 
--- Emergency Department Request
 (
+    '20000000-0000-0000-0000-000000000001',
     'Emergency',
     'Dr. Sarah Johnson',
     NOW() - INTERVAL '2 days',
     NOW() + INTERVAL '1 day',
     'Pending',
     'High',
-    jsonb_build_array(
-        jsonb_build_object(
-            'itemId', (SELECT id FROM inventory_items WHERE name = 'Paracetamol 500mg'),
-            'itemName', 'Paracetamol 500mg',
-            'requestedQuantity', 100,
-            'unitOfMeasure', 'tablets',
-            'urgency', 'High',
-            'justification', 'Running low on pain medication for emergency patients'
-        ),
-        jsonb_build_object(
-            'itemId', (SELECT id FROM inventory_items WHERE name = 'Surgical Gloves (Medium)'),
-            'itemName', 'Surgical Gloves (Medium)',
-            'requestedQuantity', 20,
-            'unitOfMeasure', 'boxes',
-            'urgency', 'Critical',
-            'justification', 'Essential for emergency procedures'
-        )
-    ),
-    'Urgent request for emergency department restocking'
+    '[
+        {
+            "itemId": "10000000-0000-0000-0000-000000000001",
+            "itemName": "Paracetamol 500mg",
+            "requestedQuantity": 100,
+            "unitOfMeasure": "tablets"
+        },
+        {
+            "itemId": "10000000-0000-0000-0000-000000000006",
+            "itemName": "Surgical Gloves (Medium)",
+            "requestedQuantity": 20,
+            "unitOfMeasure": "boxes"
+        }
+    ]'::jsonb,
+    'Urgent request for emergency department restocking due to high patient volume'
 ),
--- ICU Request
 (
+    '20000000-0000-0000-0000-000000000002',
     'ICU',
     'Maria Garcia',
     NOW() - INTERVAL '1 day',
     NOW() + INTERVAL '2 days',
     'Approved',
     'Medium',
-    jsonb_build_array(
-        jsonb_build_object(
-            'itemId', (SELECT id FROM inventory_items WHERE name = 'IV Fluid Bags (Normal Saline)'),
-            'itemName', 'IV Fluid Bags (Normal Saline)',
-            'requestedQuantity', 25,
-            'unitOfMeasure', 'bags',
-            'urgency', 'Medium',
-            'justification', 'Regular ICU patient care requirements'
-        ),
-        jsonb_build_object(
-            'itemId', (SELECT id FROM inventory_items WHERE name = 'Disposable Syringes 5ml'),
-            'itemName', 'Disposable Syringes 5ml',
-            'requestedQuantity', 50,
-            'unitOfMeasure', 'pieces',
-            'urgency', 'Medium',
-            'justification', 'Daily medication administration'
-        )
-    ),
-    'Regular ICU supply request'
+    '[
+        {
+            "itemId": "10000000-0000-0000-0000-000000000009",
+            "itemName": "IV Fluid - Normal Saline 500ml",
+            "requestedQuantity": 50,
+            "approvedQuantity": 40,
+            "unitOfMeasure": "bags"
+        },
+        {
+            "itemId": "10000000-0000-0000-0000-000000000007",
+            "itemName": "Disposable Syringes 5ml",
+            "requestedQuantity": 100,
+            "approvedQuantity": 100,
+            "unitOfMeasure": "pieces"
+        }
+    ]'::jsonb,
+    'Regular ICU supplies replenishment'
 ),
--- Pharmacy Request
 (
+    '20000000-0000-0000-0000-000000000003',
     'Pharmacy',
     'Ahmed Hassan',
     NOW() - INTERVAL '3 days',
     NOW() + INTERVAL '5 days',
-    'Completed',
-    'Low',
-    jsonb_build_array(
-        jsonb_build_object(
-            'itemId', (SELECT id FROM inventory_items WHERE name = 'Amoxicillin 500mg'),
-            'itemName', 'Amoxicillin 500mg',
-            'requestedQuantity', 100,
-            'unitOfMeasure', 'capsules',
-            'urgency', 'Low',
-            'justification', 'Restocking pharmacy inventory'
-        )
-    ),
-    'Monthly pharmacy restock'
+    'In Progress',
+    'Urgent',
+    '[
+        {
+            "itemId": "10000000-0000-0000-0000-000000000004",
+            "itemName": "Insulin (Rapid Acting)",
+            "requestedQuantity": 20,
+            "approvedQuantity": 15,
+            "unitOfMeasure": "vials"
+        },
+        {
+            "itemId": "10000000-0000-0000-0000-000000000003",
+            "itemName": "Amoxicillin 250mg",
+            "requestedQuantity": 50,
+            "approvedQuantity": 30,
+            "unitOfMeasure": "capsules"
+        }
+    ]'::jsonb,
+    'Critical medication restock - running low on essential items'
 );
+
+-- Update approved requests
+UPDATE requests 
+SET approved_by = 'John Smith', approved_date = NOW() - INTERVAL '12 hours'
+WHERE status IN ('Approved', 'In Progress');
 
 -- Insert sample orders
 INSERT INTO orders (
-    supplier, 
-    order_date, 
-    expected_delivery, 
-    status, 
-    total_amount, 
-    items, 
-    notes
+    id, supplier, order_date, expected_delivery, status, total_amount, items, notes
 ) VALUES 
--- PharmaCorp Order
 (
+    '30000000-0000-0000-0000-000000000001',
     'PharmaCorp Ltd',
     NOW() - INTERVAL '5 days',
     NOW() + INTERVAL '3 days',
     'Confirmed',
-    1375.00,
-    jsonb_build_array(
-        jsonb_build_object(
-            'itemId', (SELECT id FROM inventory_items WHERE name = 'Paracetamol 500mg'),
-            'itemName', 'Paracetamol 500mg',
-            'quantity', 1000,
-            'unitPrice', 0.25,
-            'totalPrice', 250.00
-        ),
-        jsonb_build_object(
-            'itemId', (SELECT id FROM inventory_items WHERE name = 'Ibuprofen 400mg'),
-            'itemName', 'Ibuprofen 400mg',
-            'quantity', 500,
-            'unitPrice', 0.35,
-            'totalPrice', 175.00
-        ),
-        jsonb_build_object(
-            'itemId', (SELECT id FROM inventory_items WHERE name = 'Amoxicillin 500mg'),
-            'itemName', 'Amoxicillin 500mg',
-            'quantity', 200,
-            'unitPrice', 1.25,
-            'totalPrice', 250.00
-        ),
-        jsonb_build_object(
-            'itemId', (SELECT id FROM inventory_items WHERE name = 'Insulin (Rapid Acting)'),
-            'itemName', 'Insulin (Rapid Acting)',
-            'quantity', 20,
-            'unitPrice', 45.00,
-            'totalPrice', 900.00
-        )
-    ),
-    'Monthly medication restock order'
+    2875.00,
+    '[
+        {
+            "itemId": "10000000-0000-0000-0000-000000000001",
+            "itemName": "Paracetamol 500mg",
+            "quantity": 1000,
+            "unitPrice": 0.25,
+            "totalPrice": 250.00
+        },
+        {
+            "itemId": "10000000-0000-0000-0000-000000000002",
+            "itemName": "Ibuprofen 400mg",
+            "quantity": 500,
+            "unitPrice": 0.35,
+            "totalPrice": 175.00
+        },
+        {
+            "itemId": "10000000-0000-0000-0000-000000000004",
+            "itemName": "Insulin (Rapid Acting)",
+            "quantity": 100,
+            "unitPrice": 25.50,
+            "totalPrice": 2550.00
+        }
+    ]'::jsonb,
+    'Monthly medication restock order - priority items'
 ),
--- MedSupply Order
 (
+    '30000000-0000-0000-0000-000000000002',
     'MedSupply Inc',
-    NOW() - INTERVAL '7 days',
-    NOW() + INTERVAL '1 day',
+    NOW() - INTERVAL '3 days',
+    NOW() + INTERVAL '5 days',
     'Shipped',
-    2125.00,
-    jsonb_build_array(
-        jsonb_build_object(
-            'itemId', (SELECT id FROM inventory_items WHERE name = 'Surgical Gloves (Medium)'),
-            'itemName', 'Surgical Gloves (Medium)',
-            'quantity', 100,
-            'unitPrice', 12.50,
-            'totalPrice', 1250.00
-        ),
-        jsonb_build_object(
-            'itemId', (SELECT id FROM inventory_items WHERE name = 'Surgical Gloves (Large)'),
-            'itemName', 'Surgical Gloves (Large)',
-            'quantity', 50,
-            'unitPrice', 12.50,
-            'totalPrice', 625.00
-        ),
-        jsonb_build_object(
-            'itemId', (SELECT id FROM inventory_items WHERE name = 'Disposable Syringes 5ml'),
-            'itemName', 'Disposable Syringes 5ml',
-            'quantity', 500,
-            'unitPrice', 0.75,
-            'totalPrice', 375.00
-        )
-    ),
-    'Critical supplies reorder due to low stock'
+    1875.00,
+    '[
+        {
+            "itemId": "10000000-0000-0000-0000-000000000006",
+            "itemName": "Surgical Gloves (Medium)",
+            "quantity": 100,
+            "unitPrice": 12.50,
+            "totalPrice": 1250.00
+        },
+        {
+            "itemId": "10000000-0000-0000-0000-000000000007",
+            "itemName": "Disposable Syringes 5ml",
+            "quantity": 500,
+            "unitPrice": 0.75,
+            "totalPrice": 375.00
+        },
+        {
+            "itemId": "10000000-0000-0000-0000-000000000008",
+            "itemName": "Sterile Gauze Bandages",
+            "quantity": 100,
+            "unitPrice": 2.25,
+            "totalPrice": 225.00
+        }
+    ]'::jsonb,
+    'Medical supplies restock - high usage items'
 );
 
 -- Insert sample releases
 INSERT INTO releases (
-    department, 
-    released_by, 
-    released_date, 
-    request_id, 
-    items, 
-    notes
+    id, department, released_by, released_date, request_id, items, notes
 ) VALUES 
--- Emergency Department Release
 (
-    'Emergency',
-    'John Smith',
-    NOW() - INTERVAL '1 day',
-    (SELECT id FROM requests WHERE department = 'Emergency' AND status = 'Pending' LIMIT 1),
-    jsonb_build_array(
-        jsonb_build_object(
-            'itemId', (SELECT id FROM inventory_items WHERE name = 'Paracetamol 500mg'),
-            'itemName', 'Paracetamol 500mg',
-            'releasedQuantity', 50,
-            'unitOfMeasure', 'tablets',
-            'batchNumber', 'PC2024001',
-            'expiryDate', '2025-06-15'
-        )
-    ),
-    'Partial release - remaining items pending approval'
-),
--- ICU Release
-(
+    '40000000-0000-0000-0000-000000000001',
     'ICU',
     'John Smith',
     NOW() - INTERVAL '6 hours',
-    (SELECT id FROM requests WHERE department = 'ICU' AND status = 'Approved' LIMIT 1),
-    jsonb_build_array(
-        jsonb_build_object(
-            'itemId', (SELECT id FROM inventory_items WHERE name = 'IV Fluid Bags (Normal Saline)'),
-            'itemName', 'IV Fluid Bags (Normal Saline)',
-            'releasedQuantity', 25,
-            'unitOfMeasure', 'bags',
-            'batchNumber', 'FC2024001',
-            'expiryDate', '2025-11-15'
-        ),
-        jsonb_build_object(
-            'itemId', (SELECT id FROM inventory_items WHERE name = 'Disposable Syringes 5ml'),
-            'itemName', 'Disposable Syringes 5ml',
-            'releasedQuantity', 50,
-            'unitOfMeasure', 'pieces',
-            'batchNumber', 'MS2024001',
-            'expiryDate', '2026-12-31'
-        )
-    ),
-    'Complete release for ICU request'
+    '20000000-0000-0000-0000-000000000002',
+    '[
+        {
+            "itemId": "10000000-0000-0000-0000-000000000009",
+            "itemName": "IV Fluid - Normal Saline 500ml",
+            "releasedQuantity": 40,
+            "unitOfMeasure": "bags"
+        },
+        {
+            "itemId": "10000000-0000-0000-0000-000000000007",
+            "itemName": "Disposable Syringes 5ml",
+            "releasedQuantity": 100,
+            "unitOfMeasure": "pieces"
+        }
+    ]'::jsonb,
+    'Full release as per approved request - ICU supplies'
+),
+(
+    '40000000-0000-0000-0000-000000000002',
+    'Pharmacy',
+    'John Smith',
+    NOW() - INTERVAL '2 hours',
+    '20000000-0000-0000-0000-000000000003',
+    '[
+        {
+            "itemId": "10000000-0000-0000-0000-000000000004",
+            "itemName": "Insulin (Rapid Acting)",
+            "releasedQuantity": 8,
+            "unitOfMeasure": "vials"
+        }
+    ]'::jsonb,
+    'Partial release - remaining insulin to be released when new stock arrives'
 );
 
--- Update inventory stock levels after releases
+-- Update inventory stock levels based on releases
 UPDATE inventory_items 
-SET current_stock = current_stock - 50 
-WHERE name = 'Paracetamol 500mg';
-
-UPDATE inventory_items 
-SET current_stock = current_stock - 25 
-WHERE name = 'IV Fluid Bags (Normal Saline)';
+SET current_stock = current_stock - 40
+WHERE id = '10000000-0000-0000-0000-000000000009'; -- IV Fluid
 
 UPDATE inventory_items 
-SET current_stock = current_stock - 50 
-WHERE name = 'Disposable Syringes 5ml';
+SET current_stock = current_stock - 100
+WHERE id = '10000000-0000-0000-0000-000000000007'; -- Syringes
 
--- Update stock status based on current levels
 UPDATE inventory_items 
-SET status = CASE 
-    WHEN current_stock <= 0 THEN 'Out of Stock'
-    WHEN current_stock <= (minimum_stock * 0.5) THEN 'Critical'
-    WHEN current_stock <= minimum_stock THEN 'Low Stock'
-    ELSE 'In Stock'
-END;
+SET current_stock = current_stock - 8
+WHERE id = '10000000-0000-0000-0000-000000000004'; -- Insulin
 
--- Display summary
-SELECT 
-    'SEEDING COMPLETE' as status,
-    (SELECT COUNT(*) FROM users) as total_users,
-    (SELECT COUNT(*) FROM inventory_items) as total_items,
-    (SELECT COUNT(*) FROM requests) as total_requests,
-    (SELECT COUNT(*) FROM orders) as total_orders,
-    (SELECT COUNT(*) FROM releases) as total_releases;
+-- Update request status for completed releases
+UPDATE requests 
+SET status = 'Fulfilled'
+WHERE id = '20000000-0000-0000-0000-000000000002';
 
--- Display user accounts created
-SELECT 
-    'USER ACCOUNTS' as info,
-    email,
-    first_name || ' ' || last_name as full_name,
-    role,
-    department,
-    status
-FROM users
-ORDER BY role, last_name;
-
--- Display inventory summary
-SELECT 
-    'INVENTORY SUMMARY' as info,
-    category,
-    COUNT(*) as item_count,
-    SUM(CASE WHEN status = 'Critical' THEN 1 ELSE 0 END) as critical_items,
-    SUM(CASE WHEN status = 'Low Stock' THEN 1 ELSE 0 END) as low_stock_items
-FROM inventory_items
-GROUP BY category
-ORDER BY category;
+-- Display summary of seeded data
+DO $$
+DECLARE
+    user_count INTEGER;
+    item_count INTEGER;
+    request_count INTEGER;
+    order_count INTEGER;
+    release_count INTEGER;
+BEGIN
+    SELECT COUNT(*) INTO user_count FROM users;
+    SELECT COUNT(*) INTO item_count FROM inventory_items;
+    SELECT COUNT(*) INTO request_count FROM requests;
+    SELECT COUNT(*) INTO order_count FROM orders;
+    SELECT COUNT(*) INTO release_count FROM releases;
+    
+    RAISE NOTICE '🎉 Hospital Inventory Database Seeded Successfully!';
+    RAISE NOTICE '👥 Users created: %', user_count;
+    RAISE NOTICE '📦 Inventory items created: %', item_count;
+    RAISE NOTICE '📋 Requests created: %', request_count;
+    RAISE NOTICE '🛒 Orders created: %', order_count;
+    RAISE NOTICE '📤 Releases created: %', release_count;
+    RAISE NOTICE '';
+    RAISE NOTICE '🔐 Test Login Credentials:';
+    RAISE NOTICE '   Admin: admin@villimale-hospital.mv / admin123';
+    RAISE NOTICE '   Inventory Manager: john.smith@villimale-hospital.mv / inventory123';
+    RAISE NOTICE '   Doctor: sarah.johnson@villimale-hospital.mv / doctor123';
+    RAISE NOTICE '   Nurse: maria.garcia@villimale-hospital.mv / nurse123';
+    RAISE NOTICE '   Pharmacist: ahmed.hassan@villimale-hospital.mv / pharmacist123';
+    RAISE NOTICE '';
+    RAISE NOTICE '✅ Database is ready for testing!';
+END $$;
