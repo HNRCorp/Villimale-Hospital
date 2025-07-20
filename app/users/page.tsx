@@ -1,5 +1,8 @@
 "use client"
 
+// Tell Next.js to render this page on demand (no SSG/ISR at build-time)
+export const dynamic = "force-dynamic"
+
 import { useState, useEffect } from "react"
 import { Layout } from "@/components/layout"
 import { Button } from "@/components/ui/button"
