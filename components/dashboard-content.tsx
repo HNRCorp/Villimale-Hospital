@@ -6,9 +6,28 @@ import { Button } from "@/components/ui/button"
 import { Package, Users, AlertTriangle, TrendingUp, Clock, CheckCircle } from "lucide-react"
 import { useHospitalStore } from "@/lib/store"
 import Link from "next/link"
+import { Skeleton } from "@/components/ui/skeleton"
 
 export function DashboardContent() {
-  const { inventoryItems, users, requests } = useHospitalStore()
+  const { inventoryItems = [], users = [], requests = [], isLoading } = useHospitalStore()
+
+  if (isLoading) {
+    return (
+      <div className="space-y-6">
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          <Skeleton className="h-[120px] w-full" />
+          <Skeleton className="h-[120px] w-full" />
+          <Skeleton className="h-[120px] w-full" />
+          <Skeleton className="h-[120px] w-full" />
+        </div>
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
+          <Skeleton className="col-span-4 h-[250px]" />
+          <Skeleton className="col-span-3 h-[250px]" />
+        </div>
+        <Skeleton className="h-[150px] w-full" />
+      </div>
+    )
+  }
 
   // Calculate statistics
   const totalItems = inventoryItems.length

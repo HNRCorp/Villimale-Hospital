@@ -2,7 +2,7 @@ import { create } from "zustand"
 import { persist, createJSONStorage } from "zustand/middleware"
 import { createClient } from "@supabase/supabase-js"
 import bcrypt from "bcryptjs"
-import type { User, UserRole } from "./types" // Assuming types are defined here
+import type { User, UserRole, UserProfile } from "./types" // Assuming types are defined here
 
 // Supabase client setup
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "YOUR_SUPABASE_URL"
@@ -11,9 +11,16 @@ const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "YOUR_SUPAB
 const supabase = createClient(supabaseUrl, supabaseAnonKey)
 
 interface AuthState {
-  user: User | null
-  token: string | null
-  isAuthenticated: () => boolean
+  currentUser: UserProfile | null
+  isAuthenticated: boolean
+  loginError: string | null
+  roles: UserRole[]
+}
+
+interface AuthActions {
+  setCurrentUser: (user: UserProfile | null) => void
+  setIsAuthenticated: (isAuthenticated: boolean) => void
+  setLoginError: (error: string | null) => void
   login: (email: string, password: string) => Promise<void>
   logout: () => void
   createUser: (userData: Partial<User>) => Promise<void>
@@ -22,21 +29,20 @@ interface AuthState {
   deleteUser: (userId: string) => Promise<void>
   changePassword: (userId: string, oldPassword: string, newPassword: string) => Promise<void>
   resetPassword: (email: string) => Promise<void>
-  roles: UserRole[]
   initializeStore: () => Promise<void>
 }
 
-export const useAuthStore = create<AuthState>()(
+export const useAuthStore = create<AuthState & AuthActions>()(
   persist(
     (set, get) => ({
-      user: null,
-      token: null,
+      currentUser: null,
+      isAuthenticated: false,
+      loginError: null,
       roles: ["System Administrator", "Inventory Manager", "Doctor", "Nurse", "Pharmacist"],
 
-      isAuthenticated: () => {
-        const { user, token } = get()
-        return !!user && !!token
-      },
+      setCurrentUser: (user) => set({ currentUser: user }),
+      setIsAuthenticated: (isAuthenticated) => set({ isAuthenticated }),
+      setLoginError: (error) => set({ loginError: error }),
 
       initializeStore: async () => {
         // This function is called on app load to rehydrate the store
@@ -44,13 +50,14 @@ export const useAuthStore = create<AuthState>()(
         // For now, it just ensures the store is ready.
         console.log("Auth store initialized.")
         // You might want to re-fetch user data from Supabase here if the token is valid
-        // to ensure the user object is always fresh.
+        // to ensure the currentUser object is always fresh.
       },
 
       login: async (email, password) => {
         const { data, error } = await supabase.from("users").select("*").eq("email", email).single()
 
         if (error || !data) {
+          set({ loginError: "Invalid credentials or user not found." })
           throw new Error("Login error: Invalid credentials or user not found.")
         }
 
@@ -58,27 +65,29 @@ export const useAuthStore = create<AuthState>()(
         const isPasswordValid = bcrypt.compareSync(password, user.passwordHash) // Use compareSync
 
         if (!isPasswordValid) {
+          set({ loginError: "Invalid password." })
           throw new Error("Login error: Invalid password.")
         }
 
         if (user.status === "inactive") {
+          set({ loginError: "Account is inactive. Please contact administrator." })
           throw new Error("Login error: Account is inactive. Please contact administrator.")
         }
 
         // Simulate token generation (Supabase auth would provide a real token)
         const token = `mock-token-${user.id}`
 
-        set({ user, token })
+        set({ currentUser: { ...user, token }, isAuthenticated: true })
         console.log("User logged in:", user.email)
       },
 
       logout: () => {
-        set({ user: null, token: null })
+        set({ currentUser: null, isAuthenticated: false, loginError: null })
         console.log("User logged out.")
       },
 
       createUser: async (userData) => {
-        if (!get().isAuthenticated() || get().user?.role !== "System Administrator") {
+        if (!get().isAuthenticated || get().currentUser?.role !== "System Administrator") {
           throw new Error("Unauthorized: Only System Administrators can create users.")
         }
 
@@ -104,15 +113,13 @@ export const useAuthStore = create<AuthState>()(
           throw new Error(`Error creating user: ${error.message}`)
         }
 
-        set((state) => ({ users: [...state.users, data as User] }))
         console.log("User created:", data.email)
       },
 
       fetchUsers: async () => {
-        if (!get().isAuthenticated() || get().user?.role !== "System Administrator") {
+        if (!get().isAuthenticated || get().currentUser?.role !== "System Administrator") {
           // Optionally, throw an error or return empty array if not authorized
           console.warn("Unauthorized attempt to fetch users.")
-          set({ users: [] })
           return
         }
 
@@ -123,16 +130,15 @@ export const useAuthStore = create<AuthState>()(
           throw new Error(`Error fetching users: ${error.message}`)
         }
 
-        set({ users: data as User[] })
         console.log("Users fetched:", data.length)
       },
 
       updateUser: async (userId, updates) => {
-        if (!get().isAuthenticated()) {
+        if (!get().isAuthenticated) {
           throw new Error("Unauthorized: Must be logged in to update users.")
         }
 
-        const currentUser = get().user
+        const currentUser = get().currentUser
         if (currentUser?.role !== "System Administrator" && currentUser?.id !== userId) {
           throw new Error("Unauthorized: You can only update your own profile or be an admin.")
         }
@@ -150,14 +156,13 @@ export const useAuthStore = create<AuthState>()(
         }
 
         set((state) => ({
-          users: state.users.map((u) => (u.id === userId ? (data as User) : u)),
-          user: currentUser?.id === userId ? (data as User) : currentUser, // Update current user if it's them
+          currentUser: state.currentUser?.id === userId ? (data as User) : state.currentUser, // Update current user if it's them
         }))
         console.log("User updated:", data.email)
       },
 
       deleteUser: async (userId) => {
-        if (!get().isAuthenticated() || get().user?.role !== "System Administrator") {
+        if (!get().isAuthenticated || get().currentUser?.role !== "System Administrator") {
           throw new Error("Unauthorized: Only System Administrators can delete users.")
         }
 
@@ -167,15 +172,12 @@ export const useAuthStore = create<AuthState>()(
           throw new Error(`Error deleting user: ${error.message}`)
         }
 
-        set((state) => ({
-          users: state.users.filter((u) => u.id !== userId),
-        }))
         console.log("User deleted:", userId)
       },
 
       changePassword: async (userId, oldPassword, newPassword) => {
-        const { user, updateUser } = get()
-        if (!user || user.id !== userId) {
+        const { currentUser, updateUser } = get()
+        if (!currentUser || currentUser.id !== userId) {
           throw new Error("Unauthorized: Cannot change password for another user.")
         }
 
@@ -196,7 +198,7 @@ export const useAuthStore = create<AuthState>()(
 
         const newPasswordHash = bcrypt.hashSync(newPassword, 10)
         await updateUser(userId, { passwordHash: newPasswordHash, firstLogin: false })
-        console.log("Password changed for user:", user.email)
+        console.log("Password changed for user:", currentUser.email)
       },
 
       resetPassword: async (email) => {
@@ -209,9 +211,12 @@ export const useAuthStore = create<AuthState>()(
       },
     }),
     {
-      name: "auth-storage", // unique name
-      storage: createJSONStorage(() => localStorage), // Use localStorage
-      partialize: (state) => ({ user: state.user, token: state.token }), // Only persist user and token
+      name: "auth-store", // unique name for this store in localStorage
+      storage: createJSONStorage(() => localStorage),
+      partialize: (state) => ({
+        currentUser: state.currentUser,
+        isAuthenticated: state.isAuthenticated,
+      }),
       onRehydrateStorage: (state) => {
         console.log("Auth store rehydrating...")
         return (state, error) => {
@@ -228,12 +233,16 @@ export const useAuthStore = create<AuthState>()(
       migrate: (persistedState, version) => {
         if (version === 0) {
           // Migration from version 0 to 1
-          // Ensure passwordHash is not directly stored in persistedState.user
-          if (persistedState && (persistedState as any).user && (persistedState as any).user.passwordHash) {
-            delete (persistedState as any).user.passwordHash
+          // Ensure passwordHash is not directly stored in persistedState.currentUser
+          if (
+            persistedState &&
+            (persistedState as any).currentUser &&
+            (persistedState as any).currentUser.passwordHash
+          ) {
+            delete (persistedState as any).currentUser.passwordHash
           }
         }
-        return persistedState as AuthState
+        return persistedState as AuthState & AuthActions
       },
     },
   ),
