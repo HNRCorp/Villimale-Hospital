@@ -1,3 +1,4 @@
+// components/dashboard-content.tsx
 "use client"
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -41,7 +42,7 @@ export function DashboardContent() {
   // Recent requests for display
   const recentRequests = requests.slice(0, 5)
 
-  // Low stock items for alerts
+  // Critical stock items for alerts
   const criticalItems = inventoryItems.filter((item) => item.status === "Critical").slice(0, 5)
 
   return (

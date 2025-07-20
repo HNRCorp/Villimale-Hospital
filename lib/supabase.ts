@@ -15,17 +15,36 @@ if (!supabaseUrl || !supabaseAnonKey) {
   console.warn("🔧 Run: node scripts/check-env.js to verify setup")
 }
 
-// Create the main Supabase client (for client-side operations)
-export const supabase =
-  supabaseUrl && supabaseAnonKey
-    ? createClient(supabaseUrl, supabaseAnonKey, {
-        auth: {
-          autoRefreshToken: true,
-          persistSession: true,
-          detectSessionInUrl: true,
-        },
-      })
-    : createStubClient()
+// Supabase client setup for client-side operations (e.g., fetching data with RLS)
+const createSupabaseClient = () => {
+  if (!supabaseUrl || !supabaseAnonKey) {
+    console.warn("Supabase URL or Anon Key is missing. Using a stub Supabase client for client-side operations.")
+    return {
+      from: () => ({
+        select: async () => ({ data: [], error: null }),
+        insert: async () => ({ data: [], error: null }),
+        update: async () => ({ data: [], error: null }),
+        delete: async () => ({ data: [], error: null }),
+      }),
+      auth: {
+        getUser: async () => ({ data: { user: null }, error: null }),
+        signInWithPassword: async () => ({ data: { user: null }, error: null }),
+        signUp: async () => ({ data: { user: null }, error: null }),
+        signOut: async () => ({ error: null }),
+        updateUser: async () => ({ data: { user: null }, error: null }),
+      },
+    } as any // Cast to any to match the SupabaseClient type loosely
+  }
+  return createClient(supabaseUrl, supabaseAnonKey, {
+    auth: {
+      autoRefreshToken: true,
+      persistSession: true,
+      detectSessionInUrl: true,
+    },
+  })
+}
+
+export const supabase = createSupabaseClient()
 
 // Create admin client (for server-side operations with elevated privileges)
 export const supabaseAdmin =

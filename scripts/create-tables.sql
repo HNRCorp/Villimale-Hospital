@@ -1,200 +1,149 @@
--- Hospital Inventory Management System Database Schema
--- Run this script in Supabase SQL Editor to create all tables
+-- scripts/create-tables.sql
+-- Comprehensive SQL script to create all necessary tables for the Villimale Hospital Inventory App
 
--- Enable UUID extension
+-- Enable UUID extension if not already enabled
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
--- Create users table
-CREATE TABLE IF NOT EXISTS users (
+-- 1. Users Table
+CREATE TABLE IF NOT EXISTS public.users (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    email VARCHAR(255) UNIQUE NOT NULL,
-    password_hash TEXT NOT NULL,
-    first_name VARCHAR(100) NOT NULL,
-    last_name VARCHAR(100) NOT NULL,
-    role VARCHAR(50) NOT NULL CHECK (role IN (
-        'System Administrator',
-        'Inventory Manager', 
-        'Department Head',
-        'Doctor',
-        'Nurse Manager',
-        'Pharmacist',
-        'Inventory Staff',
-        'Department Staff'
-    )),
-    department VARCHAR(100) NOT NULL,
-    status VARCHAR(20) DEFAULT 'Active' CHECK (status IN ('Active', 'Inactive', 'Pending Approval', 'Suspended')),
-    employee_id VARCHAR(20) UNIQUE,
-    phone VARCHAR(20),
-    permissions JSONB DEFAULT '[]'::jsonb,
-    profile_image TEXT,
-    is_first_login BOOLEAN DEFAULT true,
-    password_last_changed TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    login_attempts INTEGER DEFAULT 0,
-    locked_until TIMESTAMP WITH TIME ZONE,
-    approved_by UUID REFERENCES users(id),
-    approved_at TIMESTAMP WITH TIME ZONE,
-    notes TEXT,
+    employee_id TEXT UNIQUE NOT NULL,
+    username TEXT NOT NULL,
+    email TEXT UNIQUE NOT NULL,
+    password_hash TEXT NOT NULL, -- Store bcrypt hash here
+    role TEXT NOT NULL, -- e.g., 'admin', 'doctor', 'nurse', 'pharmacist', 'staff'
+    status TEXT NOT NULL DEFAULT 'Active', -- e.g., 'Active', 'Inactive', 'Locked', 'Pending'
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    last_login TIMESTAMP WITH TIME ZONE
+    last_login TIMESTAMP WITH TIME ZONE,
+    first_login BOOLEAN DEFAULT TRUE
 );
 
--- Create inventory_items table
-CREATE TABLE IF NOT EXISTS inventory_items (
+-- 2. Inventory Items Table
+CREATE TABLE IF NOT EXISTS public.inventory_items (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    name VARCHAR(255) NOT NULL,
-    category VARCHAR(100) NOT NULL,
-    description TEXT,
-    current_stock INTEGER DEFAULT 0 CHECK (current_stock >= 0),
-    minimum_stock INTEGER DEFAULT 0 CHECK (minimum_stock >= 0),
-    maximum_stock INTEGER DEFAULT 1000 CHECK (maximum_stock >= minimum_stock),
-    unit_of_measure VARCHAR(50) NOT NULL,
-    unit_price DECIMAL(10,2) DEFAULT 0.00 CHECK (unit_price >= 0),
-    supplier VARCHAR(255),
-    location VARCHAR(255),
+    name TEXT NOT NULL,
+    category TEXT NOT NULL,
+    current_stock INTEGER NOT NULL DEFAULT 0,
+    unit_of_measure TEXT NOT NULL,
+    min_stock_level INTEGER NOT NULL DEFAULT 0,
     expiry_date DATE,
-    batch_number VARCHAR(100),
-    status VARCHAR(20) DEFAULT 'In Stock' CHECK (status IN ('In Stock', 'Low Stock', 'Out of Stock', 'Critical')),
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    status TEXT NOT NULL DEFAULT 'In Stock', -- e.g., 'In Stock', 'Low Stock', 'Critical', 'Expired', 'Out of Stock'
+    location TEXT,
+    supplier TEXT,
+    last_updated TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- Create requests table
-CREATE TABLE IF NOT EXISTS requests (
+-- 3. Requests Table
+CREATE TABLE IF NOT EXISTS public.requests (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    department VARCHAR(100) NOT NULL,
-    requested_by VARCHAR(255) NOT NULL,
-    requested_date TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    required_date TIMESTAMP WITH TIME ZONE NOT NULL,
-    status VARCHAR(20) DEFAULT 'Pending' CHECK (status IN ('Pending', 'Approved', 'Rejected', 'In Progress', 'Fulfilled')),
-    priority VARCHAR(10) DEFAULT 'Medium' CHECK (priority IN ('Low', 'Medium', 'High', 'Urgent')),
-    items JSONB NOT NULL DEFAULT '[]'::jsonb,
-    notes TEXT,
-    approved_by VARCHAR(255),
-    approved_date TIMESTAMP WITH TIME ZONE,
-    rejection_reason TEXT,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    requested_by TEXT NOT NULL, -- Name of the user who requested
+    requested_by_user_id UUID REFERENCES public.users(id) ON DELETE SET NULL, -- Link to users table
+    department TEXT NOT NULL,
+    items JSONB NOT NULL DEFAULT '[]'::jsonb, -- Array of { itemId, itemName, quantity, unitOfMeasure }
+    status TEXT NOT NULL DEFAULT 'Pending', -- e.g., 'Pending', 'Approved', 'Rejected', 'Completed'
+    priority TEXT NOT NULL DEFAULT 'Medium', -- e.g., 'Low', 'Medium', 'High', 'Urgent'
+    request_date TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    approval_date TIMESTAMP WITH TIME ZONE,
+    approved_by TEXT, -- Name of the user who approved
+    notes TEXT
 );
 
--- Create orders table
-CREATE TABLE IF NOT EXISTS orders (
+-- 4. Orders Table (for purchasing new stock)
+CREATE TABLE IF NOT EXISTS public.orders (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    supplier VARCHAR(255) NOT NULL,
     order_date TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    expected_delivery TIMESTAMP WITH TIME ZONE,
-    status VARCHAR(20) DEFAULT 'Pending' CHECK (status IN ('Pending', 'Confirmed', 'Shipped', 'Delivered', 'Cancelled')),
-    total_amount DECIMAL(12,2) DEFAULT 0.00 CHECK (total_amount >= 0),
-    items JSONB NOT NULL DEFAULT '[]'::jsonb,
-    notes TEXT,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    supplier TEXT NOT NULL,
+    items JSONB NOT NULL DEFAULT '[]'::jsonb, -- Array of { itemId, itemName, quantity, unitPrice, totalPrice }
+    total_amount NUMERIC(10, 2) NOT NULL,
+    status TEXT NOT NULL DEFAULT 'Pending', -- e.g., 'Pending', 'Ordered', 'Received', 'Cancelled'
+    ordered_by TEXT NOT NULL, -- Name of the user who placed the order
+    received_date TIMESTAMP WITH TIME ZONE
 );
 
--- Create releases table
-CREATE TABLE IF NOT EXISTS releases (
+-- 5. Releases Table (for dispensing stock to departments/patients)
+CREATE TABLE IF NOT EXISTS public.releases (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    department VARCHAR(100) NOT NULL,
-    released_by VARCHAR(255) NOT NULL,
-    released_date TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    request_id UUID REFERENCES requests(id),
-    items JSONB NOT NULL DEFAULT '[]'::jsonb,
-    notes TEXT,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    release_date TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    released_by TEXT NOT NULL, -- Name of the user who released the items
+    department TEXT NOT NULL,
+    items JSONB NOT NULL DEFAULT '[]'::jsonb, -- Array of { itemId, itemName, quantity, unitOfMeasure }
+    notes TEXT
 );
 
--- Create indexes for better performance
-CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
-CREATE INDEX IF NOT EXISTS idx_users_employee_id ON users(employee_id);
-CREATE INDEX IF NOT EXISTS idx_users_status ON users(status);
-CREATE INDEX IF NOT EXISTS idx_users_role ON users(role);
+-- Enable Row Level Security (RLS) for tables
+ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.inventory_items ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.requests ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.orders ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.releases ENABLE ROW LEVEL SECURITY;
 
-CREATE INDEX IF NOT EXISTS idx_inventory_name ON inventory_items(name);
-CREATE INDEX IF NOT EXISTS idx_inventory_category ON inventory_items(category);
-CREATE INDEX IF NOT EXISTS idx_inventory_status ON inventory_items(status);
-CREATE INDEX IF NOT EXISTS idx_inventory_expiry ON inventory_items(expiry_date);
+-- RLS Policies for Users Table
+-- Admins can see and manage all users
+CREATE POLICY "Admins can manage all users" ON public.users
+FOR ALL
+USING (auth.role() = 'authenticated' AND EXISTS (SELECT 1 FROM public.users WHERE id = auth.uid() AND role = 'admin'))
+WITH CHECK (auth.role() = 'authenticated' AND EXISTS (SELECT 1 FROM public.users WHERE id = auth.uid() AND role = 'admin'));
 
-CREATE INDEX IF NOT EXISTS idx_requests_department ON requests(department);
-CREATE INDEX IF NOT EXISTS idx_requests_status ON requests(status);
-CREATE INDEX IF NOT EXISTS idx_requests_date ON requests(requested_date);
-CREATE INDEX IF NOT EXISTS idx_requests_priority ON requests(priority);
+-- Users can view their own profile
+CREATE POLICY "Users can view their own profile" ON public.users
+FOR SELECT
+USING (id = auth.uid());
 
-CREATE INDEX IF NOT EXISTS idx_orders_supplier ON orders(supplier);
-CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status);
-CREATE INDEX IF NOT EXISTS idx_orders_date ON orders(order_date);
+-- RLS Policies for Inventory Items Table
+-- All authenticated users can view inventory
+CREATE POLICY "All authenticated users can view inventory" ON public.inventory_items
+FOR SELECT
+USING (auth.role() = 'authenticated');
 
-CREATE INDEX IF NOT EXISTS idx_releases_department ON releases(department);
-CREATE INDEX IF NOT EXISTS idx_releases_date ON releases(released_date);
-CREATE INDEX IF NOT EXISTS idx_releases_request ON releases(request_id);
+-- Inventory Managers and Admins can manage inventory
+CREATE POLICY "Inventory managers and admins can manage inventory" ON public.inventory_items
+FOR ALL
+USING (auth.role() = 'authenticated' AND EXISTS (SELECT 1 FROM public.users WHERE id = auth.uid() AND (role = 'admin' OR role = 'inventory_manager')))
+WITH CHECK (auth.role() = 'authenticated' AND EXISTS (SELECT 1 FROM public.users WHERE id = auth.uid() AND (role = 'admin' OR role = 'inventory_manager')));
 
--- Create function to update updated_at timestamp
-CREATE OR REPLACE FUNCTION update_updated_at_column()
-RETURNS TRIGGER AS $$
-BEGIN
-    NEW.updated_at = NOW();
-    RETURN NEW;
-END;
-$$ language 'plpgsql';
+-- RLS Policies for Requests Table
+-- All authenticated users can view requests
+CREATE POLICY "All authenticated users can view requests" ON public.requests
+FOR SELECT
+USING (auth.role() = 'authenticated');
 
--- Create triggers to automatically update updated_at
-CREATE TRIGGER update_users_updated_at BEFORE UPDATE ON users
-    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+-- Users can create requests linked to their ID
+CREATE POLICY "Users can create requests linked to their ID" ON public.requests
+FOR INSERT
+WITH CHECK (requested_by_user_id = auth.uid());
 
-CREATE TRIGGER update_inventory_items_updated_at BEFORE UPDATE ON inventory_items
-    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+-- Inventory Managers and Admins can manage all requests
+CREATE POLICY "Inventory managers and admins can manage all requests" ON public.requests
+FOR ALL
+USING (auth.role() = 'authenticated' AND EXISTS (SELECT 1 FROM public.users WHERE id = auth.uid() AND (role = 'admin' OR role = 'inventory_manager')))
+WITH CHECK (auth.role() = 'authenticated' AND EXISTS (SELECT 1 FROM public.users WHERE id = auth.uid() AND (role = 'admin' OR role = 'inventory_manager')));
 
-CREATE TRIGGER update_requests_updated_at BEFORE UPDATE ON requests
-    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+-- RLS Policies for Orders Table
+-- All authenticated users can view orders
+CREATE POLICY "All authenticated users can view orders" ON public.orders
+FOR SELECT
+USING (auth.role() = 'authenticated');
 
-CREATE TRIGGER update_orders_updated_at BEFORE UPDATE ON orders
-    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+-- Inventory Managers and Admins can manage orders
+CREATE POLICY "Inventory managers and admins can manage orders" ON public.orders
+FOR ALL
+USING (auth.role() = 'authenticated' AND EXISTS (SELECT 1 FROM public.users WHERE id = auth.uid() AND (role = 'admin' OR role = 'inventory_manager')))
+WITH CHECK (auth.role() = 'authenticated' AND EXISTS (SELECT 1 FROM public.users WHERE id = auth.uid() AND (role = 'admin' OR role = 'inventory_manager')));
 
-CREATE TRIGGER update_releases_updated_at BEFORE UPDATE ON releases
-    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+-- RLS Policies for Releases Table
+-- All authenticated users can view releases
+CREATE POLICY "All authenticated users can view releases" ON public.releases
+FOR SELECT
+USING (auth.role() = 'authenticated');
 
--- Enable Row Level Security (RLS)
-ALTER TABLE users ENABLE ROW LEVEL SECURITY;
-ALTER TABLE inventory_items ENABLE ROW LEVEL SECURITY;
-ALTER TABLE requests ENABLE ROW LEVEL SECURITY;
-ALTER TABLE orders ENABLE ROW LEVEL SECURITY;
-ALTER TABLE releases ENABLE ROW LEVEL SECURITY;
-
--- Create RLS policies (allow all operations for now, can be refined later)
-CREATE POLICY "Allow all operations on users" ON users FOR ALL USING (true);
-CREATE POLICY "Allow all operations on inventory_items" ON inventory_items FOR ALL USING (true);
-CREATE POLICY "Allow all operations on requests" ON requests FOR ALL USING (true);
-CREATE POLICY "Allow all operations on orders" ON orders FOR ALL USING (true);
-CREATE POLICY "Allow all operations on releases" ON releases FOR ALL USING (true);
-
--- Create function to automatically update inventory status based on stock levels
-CREATE OR REPLACE FUNCTION update_inventory_status()
-RETURNS TRIGGER AS $$
-BEGIN
-    IF NEW.current_stock <= 0 THEN
-        NEW.status = 'Out of Stock';
-    ELSIF NEW.current_stock <= (NEW.minimum_stock * 0.5) THEN
-        NEW.status = 'Critical';
-    ELSIF NEW.current_stock <= NEW.minimum_stock THEN
-        NEW.status = 'Low Stock';
-    ELSE
-        NEW.status = 'In Stock';
-    END IF;
-    RETURN NEW;
-END;
-$$ language 'plpgsql';
-
--- Create trigger to automatically update inventory status
-CREATE TRIGGER update_inventory_status_trigger 
-    BEFORE INSERT OR UPDATE OF current_stock, minimum_stock 
-    ON inventory_items
-    FOR EACH ROW EXECUTE FUNCTION update_inventory_status();
+-- Inventory Managers and Admins can manage releases
+CREATE POLICY "Inventory managers and admins can manage releases" ON public.releases
+FOR ALL
+USING (auth.role() = 'authenticated' AND EXISTS (SELECT 1 FROM public.users WHERE id = auth.uid() AND (role = 'admin' OR role = 'inventory_manager')))
+WITH CHECK (auth.role() = 'authenticated' AND EXISTS (SELECT 1 FROM public.users WHERE id = auth.uid() AND (role = 'admin' OR role = 'inventory_manager')));
 
 -- Display success message
 DO $$
 BEGIN
-    RAISE NOTICE '✅ Hospital Inventory Database Schema Created Successfully!';
-    RAISE NOTICE '📋 Tables created: users, inventory_items, requests, orders, releases';
-    RAISE NOTICE '🔧 Indexes, triggers, and RLS policies configured';
-    RAISE NOTICE '🚀 Ready for seed data - run scripts/seed-data.sql next';
+    RAISE NOTICE '✅ All tables created and RLS policies applied successfully!';
 END $$;

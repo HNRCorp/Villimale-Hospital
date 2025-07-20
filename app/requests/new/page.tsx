@@ -1,3 +1,4 @@
+// app/requests/new/page.tsx
 "use client"
 
 import type React from "react"
@@ -5,7 +6,7 @@ import type React from "react"
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { useHospitalStore } from "@/lib/store"
-import { useAuthStore } from "@/lib/auth-store" // Import auth store
+import { useAuthStore } from "@/lib/auth-store"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
@@ -33,7 +34,7 @@ export default function NewRequestPage() {
   const router = useRouter()
   const { toast } = useToast()
   const { inventoryItems, createRequest, isLoading: storeLoading, initializeStore } = useHospitalStore()
-  const { currentUser } = useAuthStore() // Get current user from auth store
+  const { currentUser } = useAuthStore()
 
   const [searchTerm, setSearchTerm] = useState("")
   const [selectedDepartment, setSelectedDepartment] = useState("")
@@ -92,7 +93,7 @@ export default function NewRequestPage() {
   const filteredItems = inventoryItems.filter(
     (item) =>
       item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.id.toLowerCase().includes(searchTerm.toLowerCase()) || // Assuming SKU is part of ID or similar
+      item.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
       item.category.toLowerCase().includes(searchTerm.toLowerCase()),
   )
 
@@ -137,7 +138,7 @@ export default function NewRequestPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
-    if (!currentUser?.id) {
+    if (!currentUser?.id || !currentUser?.username) {
       toast({
         title: "Authentication Error",
         description: "You must be logged in to submit a request.",
@@ -175,14 +176,15 @@ export default function NewRequestPage() {
       const requestData = {
         department: selectedDepartment,
         priority,
-        notes: justification, // Map justification to notes for consistency with store type
+        notes: justification,
+        requestedBy: currentUser.username, // Pass current user's username
+        requestedByUserId: currentUser.id, // Pass current user's ID
         items: requestItems.map((item) => ({
           itemId: item.itemId,
           itemName: item.itemName,
           quantity: item.requestedQuantity,
           unitOfMeasure: item.unit,
         })),
-        // requestedBy and requestedByUserId are handled by the store's createRequest action
       }
 
       const result = await createRequest(requestData)
