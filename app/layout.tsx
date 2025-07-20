@@ -7,7 +7,7 @@ import { ThemeProvider } from "@/components/theme-provider"
 import { Toaster } from "@/components/ui/toaster"
 
 /**
- *  ⛔  Never pre-render: render on demand at runtime
+ *  ⛔  Never pre-render: render on demand instead
  *  This prevents Next.js from executing client-only logic during `next build`.
  */
 export const dynamic = "force-dynamic"
@@ -20,7 +20,6 @@ const inter = Inter({
 export const metadata: Metadata = {
   title: "Villimalé Hospital Inventory",
   description: "Modern inventory & workflow management for Villimalé Hospital",
-    generator: 'v0.dev'
 }
 
 export default function RootLayout({
