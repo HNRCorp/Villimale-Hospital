@@ -1,6 +1,6 @@
-// Disable static generation – render on demand instead
+"use client"
+
 export const dynamic = "force-dynamic"
-;("use client")
 
 import type React from "react"
 
@@ -15,7 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox"
 import { Textarea } from "@/components/ui/textarea"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { ArrowLeft, Save, User, Shield, AlertTriangle, CheckCircle } from "lucide-react"
+import { ArrowLeft, Save, User, Shield, AlertTriangle, CheckCircle } from 'lucide-react'
 import Link from "next/link"
 import { useAuthStore } from "@/lib/auth-store"
 
