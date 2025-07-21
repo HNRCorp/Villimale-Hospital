@@ -1,179 +1,587 @@
-// lib/auth-store.ts
 "use client"
 
 import { create } from "zustand"
-import { persist, createJSONStorage } from "zustand/middleware"
-import type { UserProfile, UserRole } from "./types"
-import {
-  loginUser,
-  registerUser,
-  changeUserPassword,
-  resetUserPassword,
-  fetchUsersServer,
-  updateUserServer,
-  deleteUserServer,
-} from "@/app/auth/actions"
+import { persist } from "zustand/middleware"
+
+export interface User {
+  id: string
+  email: string
+  firstName: string
+  lastName: string
+  role:
+    | "System Administrator"
+    | "Inventory Manager"
+    | "Department Head"
+    | "Doctor"
+    | "Nurse Manager"
+    | "Pharmacist"
+    | "Inventory Staff"
+    | "Department Staff"
+  department: string
+  status: "Active" | "Inactive" | "Pending Approval" | "Suspended"
+  createdAt: string
+  lastLogin?: string
+  employeeId?: string
+  phone?: string
+  permissions: string[]
+  profileImage?: string
+  isFirstLogin: boolean
+  passwordLastChanged?: string
+  loginAttempts: number
+  lockedUntil?: string
+  approvedBy?: string
+  approvedAt?: string
+  notes?: string
+}
 
 interface AuthState {
-  currentUser: UserProfile | null
+  user: User | null
   isAuthenticated: boolean
-  loginError: string | null
-  roles: UserRole[]
-  isLoading: boolean // Add loading state for auth operations
-}
-
-interface AuthActions {
-  initializeStore: () => Promise<void>
-  login: (employeeId: string, password: string) => Promise<boolean>
+  users: User[]
+  login: (
+    email: string,
+    password: string,
+  ) => Promise<{ success: boolean; error?: string; requiresPasswordChange?: boolean }>
   logout: () => void
-  register: (
-    userData: Omit<UserProfile, "id" | "createdAt" | "status" | "firstLogin" | "lastLogin"> & { password: string },
-  ) => Promise<{ success: boolean; message: string }>
-  changePassword: (
-    userId: string,
-    oldPassword: string,
-    newPassword: string,
-  ) => Promise<{ success: boolean; message: string }>
-  resetPassword: (employeeId: string, newPassword: string) => Promise<{ success: boolean; message: string }>
-  // User management actions (for admin views, etc.)
-  fetchUsers: () => Promise<UserProfile[]>
-  updateUser: (userId: string, updates: Partial<UserProfile>) => Promise<{ success: boolean; message: string }>
-  deleteUser: (userId: string) => Promise<{ success: boolean; message: string }>
+  register: (userData: {
+    email: string
+    password: string
+    firstName: string
+    lastName: string
+    role: string
+    department: string
+    employeeId?: string
+    phone?: string
+  }) => Promise<{ success: boolean; error?: string }>
+  createUser: (userData: {
+    email: string
+    password: string
+    firstName: string
+    lastName: string
+    role: string
+    department: string
+    employeeId?: string
+    phone?: string
+    permissions: string[]
+    status?: string
+    notes?: string
+  }) => Promise<{ success: boolean; error?: string }>
+  updateUser: (userId: string, updates: Partial<User>) => Promise<{ success: boolean; error?: string }>
+  deleteUser: (userId: string) => Promise<{ success: boolean; error?: string }>
+  approveUser: (userId: string, approverId: string) => Promise<{ success: boolean; error?: string }>
+  suspendUser: (userId: string, reason: string) => Promise<{ success: boolean; error?: string }>
+  resetPassword: (userId: string, newPassword: string) => Promise<{ success: boolean; error?: string }>
+  changePassword: (currentPassword: string, newPassword: string) => Promise<{ success: boolean; error?: string }>
+  getAllUsers: () => User[]
+  getUserById: (userId: string) => User | undefined
+  hasPermission: (permission: string) => boolean
 }
 
-export const useAuthStore = create<AuthState & AuthActions>()(
+// Enhanced demo users with more realistic data
+const initialUsers: (User & { password: string })[] = [
+  {
+    id: "1",
+    email: "admin@villimale-hospital.mv",
+    password: "admin123",
+    firstName: "System",
+    lastName: "Administrator",
+    role: "System Administrator",
+    department: "IT",
+    status: "Active",
+    createdAt: "2024-01-01T00:00:00Z",
+    lastLogin: "2024-01-15T10:30:00Z",
+    employeeId: "EMP001",
+    phone: "+960 330-1001",
+    permissions: [
+      "Full Access",
+      "User Management",
+      "System Settings",
+      "View Reports",
+      "Manage Orders",
+      "Release Items",
+      "Approve Requests",
+      "View Inventory",
+      "Generate Reports",
+    ],
+    isFirstLogin: false,
+    passwordLastChanged: "2024-01-01T00:00:00Z",
+    loginAttempts: 0,
+    approvedBy: "system",
+    approvedAt: "2024-01-01T00:00:00Z",
+  },
+  {
+    id: "2",
+    email: "john.smith@villimale-hospital.mv",
+    password: "inventory123",
+    firstName: "John",
+    lastName: "Smith",
+    role: "Inventory Manager",
+    department: "Inventory",
+    status: "Active",
+    createdAt: "2024-01-01T00:00:00Z",
+    lastLogin: "2024-01-15T09:15:00Z",
+    employeeId: "EMP002",
+    phone: "+960 330-1002",
+    permissions: [
+      "View Inventory",
+      "Add/Edit Items",
+      "Manage Orders",
+      "Release Items",
+      "Approve Requests",
+      "View Reports",
+      "Generate Reports",
+      "Manage Suppliers",
+    ],
+    isFirstLogin: false,
+    passwordLastChanged: "2024-01-01T00:00:00Z",
+    loginAttempts: 0,
+    approvedBy: "1",
+    approvedAt: "2024-01-01T00:00:00Z",
+  },
+  {
+    id: "3",
+    email: "sarah.johnson@villimale-hospital.mv",
+    password: "doctor123",
+    firstName: "Dr. Sarah",
+    lastName: "Johnson",
+    role: "Department Head",
+    department: "Emergency",
+    status: "Active",
+    createdAt: "2024-01-01T00:00:00Z",
+    lastLogin: "2024-01-15T08:45:00Z",
+    employeeId: "DOC001",
+    phone: "+960 330-1003",
+    permissions: [
+      "View Inventory",
+      "Request Items",
+      "Approve Department Requests",
+      "View Department Reports",
+      "Manage Department Users",
+    ],
+    isFirstLogin: false,
+    passwordLastChanged: "2024-01-01T00:00:00Z",
+    loginAttempts: 0,
+    approvedBy: "1",
+    approvedAt: "2024-01-01T00:00:00Z",
+  },
+]
+
+export const useAuthStore = create<AuthState>()(
   persist(
     (set, get) => ({
-      currentUser: null,
+      user: null,
       isAuthenticated: false,
-      loginError: null,
-      roles: ["admin", "doctor", "nurse", "pharmacist", "staff"], // Use lowercase roles for consistency
-      isLoading: false,
+      users: initialUsers.map(({ password, ...user }) => user),
 
-      initializeStore: async () => {
-        console.log("Auth store initialized.")
-        // No direct Supabase calls or bcrypt here.
-        // If currentUser exists from persistence, it's considered valid until logout or session invalidation.
-      },
+      login: async (email: string, password: string) => {
+        // Simulate API delay
+        await new Promise((resolve) => setTimeout(resolve, 1000))
 
-      login: async (employeeId, password) => {
-        set({ isLoading: true, loginError: null })
-        const result = await loginUser(employeeId, password)
-        if (result.success && result.user) {
-          set({ currentUser: result.user, isAuthenticated: true, isLoading: false })
-          console.log("User logged in:", result.user.email)
-          return true
-        } else {
-          set({ loginError: result.error || "Login failed.", isLoading: false })
-          return false
+        const currentState = get()
+        const allUsers = [...initialUsers]
+
+        // Add any users created during the session
+        currentState.users.forEach((stateUser) => {
+          const existingIndex = allUsers.findIndex((u) => u.id === stateUser.id)
+          if (existingIndex === -1) {
+            // This is a newly created user, add with default password
+            allUsers.push({ ...stateUser, password: "temp123" } as User & { password: string })
+          }
+        })
+
+        const user = allUsers.find((u) => u.email === email)
+
+        if (!user) {
+          return { success: false, error: "User not found" }
+        }
+
+        // Check if account is locked
+        if (user.lockedUntil && new Date(user.lockedUntil) > new Date()) {
+          return { success: false, error: "Account is temporarily locked. Please try again later." }
+        }
+
+        // Check if account is suspended
+        if (user.status === "Suspended") {
+          return { success: false, error: "Account has been suspended. Please contact administrator." }
+        }
+
+        // Check if account is pending approval
+        if (user.status === "Pending Approval") {
+          return { success: false, error: "Account is pending approval. Please wait for administrator approval." }
+        }
+
+        // Check if account is inactive
+        if (user.status === "Inactive") {
+          return { success: false, error: "Account is inactive. Please contact administrator." }
+        }
+
+        // Verify password
+        if (user.password !== password) {
+          // Increment login attempts
+          const updatedUser = { ...user, loginAttempts: user.loginAttempts + 1 }
+
+          // Lock account after 5 failed attempts
+          if (updatedUser.loginAttempts >= 5) {
+            updatedUser.lockedUntil = new Date(Date.now() + 30 * 60 * 1000).toISOString() // 30 minutes
+          }
+
+          // Update user in state
+          set((state) => ({
+            users: state.users.map((u) => (u.id === user.id ? updatedUser : u)),
+          }))
+
+          return {
+            success: false,
+            error: `Invalid password. ${5 - updatedUser.loginAttempts} attempts remaining.`,
+          }
+        }
+
+        // Reset login attempts on successful login
+        const { password: _, ...userWithoutPassword } = user
+        const updatedUser = {
+          ...userWithoutPassword,
+          lastLogin: new Date().toISOString(),
+          loginAttempts: 0,
+          lockedUntil: undefined,
+        }
+
+        // Update user in state
+        set((state) => ({
+          user: updatedUser,
+          isAuthenticated: true,
+          users: state.users.map((u) => (u.id === user.id ? updatedUser : u)),
+        }))
+
+        return {
+          success: true,
+          requiresPasswordChange: user.isFirstLogin,
         }
       },
 
       logout: () => {
-        set({ currentUser: null, isAuthenticated: false, loginError: null })
-        console.log("User logged out.")
+        set({ user: null, isAuthenticated: false })
       },
 
       register: async (userData) => {
-        set({ isLoading: true })
-        const result = await registerUser(userData)
-        set({ isLoading: false })
-        return result
-      },
+        // Simulate API delay
+        await new Promise((resolve) => setTimeout(resolve, 1500))
 
-      changePassword: async (userId, oldPassword, newPassword) => {
-        set({ isLoading: true })
-        const result = await changeUserPassword(userId, oldPassword, newPassword)
-        if (result.success) {
-          // If current user changed their own password, update firstLogin status
-          set((state) => {
-            if (state.currentUser?.id === userId) {
-              return { currentUser: { ...state.currentUser, firstLogin: false } }
-            }
-            return {}
-          })
+        const currentState = get()
+
+        // Check if user already exists
+        const existingUser = currentState.users.find((u) => u.email === userData.email)
+        if (existingUser) {
+          return { success: false, error: "User with this email already exists" }
         }
-        set({ isLoading: false })
-        return result
-      },
 
-      resetPassword: async (employeeId, newPassword) => {
-        set({ isLoading: true })
-        const result = await resetUserPassword(employeeId, newPassword)
-        set({ isLoading: false })
-        return result
-      },
-
-      fetchUsers: async () => {
-        set({ isLoading: true })
-        const result = await fetchUsersServer()
-        set({ isLoading: false })
-        if (result.users) {
-          return result.users
-        } else {
-          console.error("Error fetching users:", result.error)
-          return []
+        // Check if employee ID already exists
+        if (userData.employeeId) {
+          const existingEmployeeId = currentState.users.find((u) => u.employeeId === userData.employeeId)
+          if (existingEmployeeId) {
+            return { success: false, error: "Employee ID already exists" }
+          }
         }
+
+        // Get default permissions for role
+        const defaultPermissions = getRolePermissions(userData.role)
+
+        // Create new user
+        const newUser: User = {
+          id: Date.now().toString(),
+          email: userData.email,
+          firstName: userData.firstName,
+          lastName: userData.lastName,
+          role: userData.role as User["role"],
+          department: userData.department,
+          employeeId: userData.employeeId,
+          phone: userData.phone,
+          status: "Pending Approval", // New registrations require approval
+          permissions: defaultPermissions,
+          createdAt: new Date().toISOString(),
+          isFirstLogin: true,
+          loginAttempts: 0,
+        }
+
+        set((state) => ({
+          users: [...state.users, newUser],
+        }))
+
+        return { success: true }
+      },
+
+      createUser: async (userData) => {
+        // Simulate API delay
+        await new Promise((resolve) => setTimeout(resolve, 1000))
+
+        const currentState = get()
+
+        // Check if user already exists
+        const existingUser = currentState.users.find((u) => u.email === userData.email)
+        if (existingUser) {
+          return { success: false, error: "User with this email already exists" }
+        }
+
+        // Check if employee ID already exists
+        if (userData.employeeId) {
+          const existingEmployeeId = currentState.users.find((u) => u.employeeId === userData.employeeId)
+          if (existingEmployeeId) {
+            return { success: false, error: "Employee ID already exists" }
+          }
+        }
+
+        const currentUser = currentState.user
+        if (!currentUser) {
+          return { success: false, error: "Not authenticated" }
+        }
+
+        // Create new user
+        const newUser: User = {
+          id: Date.now().toString(),
+          email: userData.email,
+          firstName: userData.firstName,
+          lastName: userData.lastName,
+          role: userData.role as User["role"],
+          department: userData.department,
+          employeeId: userData.employeeId,
+          phone: userData.phone,
+          status: (userData.status as User["status"]) || "Active",
+          permissions: userData.permissions,
+          createdAt: new Date().toISOString(),
+          isFirstLogin: true,
+          loginAttempts: 0,
+          approvedBy: currentUser.id,
+          approvedAt: new Date().toISOString(),
+          notes: userData.notes,
+        }
+
+        set((state) => ({
+          users: [...state.users, newUser],
+        }))
+
+        return { success: true }
       },
 
       updateUser: async (userId, updates) => {
-        set({ isLoading: true })
-        const result = await updateUserServer(userId, updates)
-        if (result.success) {
-          // If the current user was updated, update the store's currentUser
-          set((state) => {
-            if (state.currentUser?.id === userId) {
-              return { currentUser: { ...state.currentUser, ...updates } }
-            }
-            return {}
-          })
+        // Simulate API delay
+        await new Promise((resolve) => setTimeout(resolve, 500))
+
+        const currentState = get()
+        const userExists = currentState.users.find((u) => u.id === userId)
+        if (!userExists) {
+          return { success: false, error: "User not found" }
         }
-        set({ isLoading: false })
-        return result
+
+        // Update user
+        set((state) => {
+          const updatedUsers = state.users.map((u) => (u.id === userId ? { ...u, ...updates } : u))
+
+          // Update current user if it's the same user
+          const updatedCurrentUser = state.user && state.user.id === userId ? { ...state.user, ...updates } : state.user
+
+          return {
+            users: updatedUsers,
+            user: updatedCurrentUser,
+          }
+        })
+
+        return { success: true }
       },
 
       deleteUser: async (userId) => {
-        set({ isLoading: true })
-        const result = await deleteUserServer(userId)
-        set({ isLoading: false })
-        return result
+        // Simulate API delay
+        await new Promise((resolve) => setTimeout(resolve, 500))
+
+        const currentState = get()
+        const userExists = currentState.users.find((u) => u.id === userId)
+        if (!userExists) {
+          return { success: false, error: "User not found" }
+        }
+
+        set((state) => ({
+          users: state.users.filter((u) => u.id !== userId),
+        }))
+
+        return { success: true }
+      },
+
+      approveUser: async (userId, approverId) => {
+        // Simulate API delay
+        await new Promise((resolve) => setTimeout(resolve, 500))
+
+        const currentState = get()
+        const userExists = currentState.users.find((u) => u.id === userId)
+        if (!userExists) {
+          return { success: false, error: "User not found" }
+        }
+
+        set((state) => ({
+          users: state.users.map((u) =>
+            u.id === userId
+              ? {
+                  ...u,
+                  status: "Active" as const,
+                  approvedBy: approverId,
+                  approvedAt: new Date().toISOString(),
+                }
+              : u,
+          ),
+        }))
+
+        return { success: true }
+      },
+
+      suspendUser: async (userId, reason) => {
+        // Simulate API delay
+        await new Promise((resolve) => setTimeout(resolve, 500))
+
+        const currentState = get()
+        const userExists = currentState.users.find((u) => u.id === userId)
+        if (!userExists) {
+          return { success: false, error: "User not found" }
+        }
+
+        set((state) => ({
+          users: state.users.map((u) =>
+            u.id === userId
+              ? {
+                  ...u,
+                  status: "Suspended" as const,
+                  notes: reason,
+                }
+              : u,
+          ),
+        }))
+
+        return { success: true }
+      },
+
+      resetPassword: async (userId, newPassword) => {
+        // Simulate API delay
+        await new Promise((resolve) => setTimeout(resolve, 500))
+
+        const currentState = get()
+        const userExists = currentState.users.find((u) => u.id === userId)
+        if (!userExists) {
+          return { success: false, error: "User not found" }
+        }
+
+        set((state) => ({
+          users: state.users.map((u) =>
+            u.id === userId
+              ? {
+                  ...u,
+                  isFirstLogin: true,
+                  passwordLastChanged: new Date().toISOString(),
+                }
+              : u,
+          ),
+        }))
+
+        return { success: true }
+      },
+
+      changePassword: async (currentPassword, newPassword) => {
+        // Simulate API delay
+        await new Promise((resolve) => setTimeout(resolve, 500))
+
+        const currentUser = get().user
+        if (!currentUser) {
+          return { success: false, error: "Not authenticated" }
+        }
+
+        // In a real app, you'd verify the current password here
+        // For demo purposes, we'll assume it's correct
+
+        set((state) => ({
+          user: state.user
+            ? {
+                ...state.user,
+                isFirstLogin: false,
+                passwordLastChanged: new Date().toISOString(),
+              }
+            : null,
+          users: state.users.map((u) =>
+            u.id === currentUser.id
+              ? {
+                  ...u,
+                  isFirstLogin: false,
+                  passwordLastChanged: new Date().toISOString(),
+                }
+              : u,
+          ),
+        }))
+
+        return { success: true }
+      },
+
+      getAllUsers: () => {
+        return get().users
+      },
+
+      getUserById: (userId) => {
+        return get().users.find((u) => u.id === userId)
+      },
+
+      hasPermission: (permission) => {
+        const currentUser = get().user
+        if (!currentUser) return false
+        return currentUser.permissions.includes(permission) || currentUser.permissions.includes("Full Access")
       },
     }),
     {
-      name: "auth-store", // unique name for this store in localStorage
-      storage: createJSONStorage(() => localStorage),
+      name: "auth-storage",
       partialize: (state) => ({
-        currentUser: state.currentUser,
+        user: state.user,
         isAuthenticated: state.isAuthenticated,
+        users: state.users,
       }),
-      onRehydrateStorage: () => {
-        console.log("Auth store rehydrating...")
-        // No 'set' call here, just return the rehydration function
-        return (_persistedState, error) => {
-          if (error) {
-            console.error("Auth store rehydration failed:", error)
-          } else {
-            console.log("Auth store rehydrated.")
-          }
-        }
-      },
-      version: 1, // Version for migrations
-      migrate: (persistedState, version) => {
-        if (version === 0) {
-          // Migration from version 0 to 1: ensure passwordHash is not persisted
-          if (
-            persistedState &&
-            (persistedState as any).currentUser &&
-            (persistedState as any).currentUser.passwordHash
-          ) {
-            delete (persistedState as any).currentUser.passwordHash
-          }
-        }
-        return persistedState as AuthState & AuthActions
-      },
     },
   ),
 )
 
-// Initialize the store on app load
-useAuthStore.getState().initializeStore()
+// Helper function to get default permissions for a role
+function getRolePermissions(role: string): string[] {
+  const rolePermissions: Record<string, string[]> = {
+    "System Administrator": [
+      "Full Access",
+      "User Management",
+      "System Settings",
+      "View Reports",
+      "Manage Orders",
+      "Release Items",
+      "Approve Requests",
+      "View Inventory",
+      "Generate Reports",
+    ],
+    "Inventory Manager": [
+      "View Inventory",
+      "Add/Edit Items",
+      "Manage Orders",
+      "Release Items",
+      "Approve Requests",
+      "View Reports",
+      "Generate Reports",
+      "Manage Suppliers",
+    ],
+    "Department Head": [
+      "View Inventory",
+      "Request Items",
+      "Approve Department Requests",
+      "View Department Reports",
+      "Manage Department Users",
+    ],
+    Doctor: ["View Inventory", "Request Items", "View Request Status"],
+    "Nurse Manager": ["View Inventory", "Request Items", "Approve Nursing Requests", "View Department Reports"],
+    Pharmacist: [
+      "View Inventory",
+      "Request Items",
+      "Manage Medications",
+      "View Pharmacy Reports",
+      "Track Controlled Substances",
+    ],
+    "Inventory Staff": ["View Inventory", "Release Items", "Update Stock", "Process Requests"],
+    "Department Staff": ["View Inventory", "Request Items"],
+  }
+
+  return rolePermissions[role] || ["View Inventory", "Request Items"]
+}
